@@ -1,0 +1,6 @@
+build/
+cache/
+config.json
+vectorstore.db
+progress.dat
+*.bz2
