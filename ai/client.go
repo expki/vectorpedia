@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/expki/vectorpedia/logger"
 	"github.com/klauspost/compress/zstd"
 	"golang.org/x/net/http2"
 )
@@ -54,11 +56,13 @@ type client struct {
 	decoder        *zstd.Decoder
 	mu             sync.RWMutex
 	clientMu       sync.RWMutex
+	appCtx         context.Context
 }
 
 type server struct {
 	url            string
 	activeRequests atomic.Int64
+	isHealthy      atomic.Bool
 }
 
 type Usage struct {
@@ -67,7 +71,7 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-func NewClient(urls []string, token string) (Client, error) {
+func NewClient(appCtx context.Context, urls []string, token string) (Client, error) {
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("at least one URL must be provided")
 	}
@@ -92,15 +96,24 @@ func NewClient(urls []string, token string) (Client, error) {
 		servers[i] = &server{
 			url: url,
 		}
+		servers[i].isHealthy.Store(true) // Assume healthy initially
 	}
 
-	return &client{
+	c := &client{
 		token:      token,
 		servers:    servers,
 		httpClient: httpClient,
 		encoder:    encoder,
 		decoder:    decoder,
-	}, nil
+		appCtx:     appCtx,
+	}
+
+	// Start health checks for all servers
+	for _, srv := range servers {
+		go c.healthCheck(srv)
+	}
+
+	return c, nil
 }
 
 func createHTTPClient() (*http.Client, error) {
@@ -143,21 +156,88 @@ func (c *client) selectServer() (*server, func()) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	server := c.servers[rand.IntN(len(c.servers)-1)]
+	// Filter healthy servers
+	var healthyServers []*server
+	for _, srv := range c.servers {
+		if srv.isHealthy.Load() {
+			healthyServers = append(healthyServers, srv)
+		}
+	}
+
+	// If no healthy servers, return nil
+	if len(healthyServers) == 0 {
+		return nil, func() {}
+	}
+
+	// Select server with least active requests from healthy servers
+	server := healthyServers[rand.IntN(len(healthyServers))]
 	requests := server.activeRequests.Load()
 
-	for _, challengerServer := range c.servers {
+	for _, challengerServer := range healthyServers {
 		challengerRequests := challengerServer.activeRequests.Load()
 		if challengerRequests >= requests {
 			continue
 		}
 		server = challengerServer
 		requests = challengerRequests
-		break
 	}
 
 	server.activeRequests.Add(1)
 	return server, func() {
 		server.activeRequests.Add(-1)
+	}
+}
+
+func (c *client) healthCheck(srv *server) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	// Do initial health check
+	c.checkServerHealth(srv)
+
+	for {
+		select {
+		case <-c.appCtx.Done():
+			return
+		case <-ticker.C:
+			c.checkServerHealth(srv)
+		}
+	}
+}
+
+func (c *client) checkServerHealth(srv *server) {
+	wasHealthy := srv.isHealthy.Load()
+	ctx, cancel := context.WithTimeout(c.appCtx, 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", srv.url+"/ping", nil)
+	if err != nil {
+		if wasHealthy {
+			srv.isHealthy.Store(false)
+			logger.Sugar().Warnf("server is down: %s", srv.url)
+		}
+		return
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if wasHealthy {
+			srv.isHealthy.Store(false)
+			logger.Sugar().Warnf("server is down: %s", srv.url)
+		}
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusOK {
+		if !wasHealthy {
+			srv.isHealthy.Store(true)
+			logger.Sugar().Infof("server is up: %s", srv.url)
+		}
+	} else {
+		if wasHealthy {
+			srv.isHealthy.Store(false)
+			logger.Sugar().Warnf("server is down: %s", srv.url)
+		}
 	}
 }

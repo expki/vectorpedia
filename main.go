@@ -75,7 +75,7 @@ func main() {
 
 	// AI
 	logger.Sugar().Info("Loading AI Client...")
-	aiClient, err := ai.NewClient(cfg.URL, cfg.Token)
+	aiClient, err := ai.NewClient(appCtx, cfg.URL, cfg.Token)
 	if err != nil {
 		logger.Sugar().Fatalf("ai.New: %v", err)
 	}
