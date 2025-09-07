@@ -14,14 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/expki/go-vectorsearch/ai"
-	vectorconfig "github.com/expki/go-vectorsearch/config"
-	"github.com/expki/go-vectorsearch/database"
-	"github.com/expki/go-vectorsearch/logger"
-	vectorsearch "github.com/expki/go-vectorsearch/server"
+	"github.com/expki/vectorpedia/ai"
 	"github.com/expki/vectorpedia/config"
-	"github.com/expki/vectorpedia/server"
+	"github.com/expki/vectorpedia/database"
+	"github.com/expki/vectorpedia/logger"
 	"github.com/expki/vectorpedia/static"
+	"github.com/expki/vectorpedia/wikipedia"
 
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
@@ -76,8 +74,8 @@ func main() {
 	defer l.Sync()
 
 	// AI
-	logger.Sugar().Info("Loading AI...")
-	aiClient, err := ai.NewAI(cfg.AI)
+	logger.Sugar().Info("Loading AI Client...")
+	aiClient, err := ai.NewClient(cfg.URL, cfg.Token)
 	if err != nil {
 		logger.Sugar().Fatalf("ai.New: %v", err)
 	}
@@ -89,28 +87,14 @@ func main() {
 		logger.Sugar().Fatalf("database.New: %v", err)
 	}
 
-	// VectorSearch
-	logger.Sugar().Info("Loading vector search...")
-	vs := vectorsearch.New(appCtx, vectorconfig.Config{
-		Server:   cfg.Server,
-		TLS:      cfg.TLS,
-		Database: cfg.Database,
-		AI:       cfg.AI,
-		LogLevel: cfg.LogLevel,
-	}, db, aiClient)
-
-	// Server
-	logger.Sugar().Info("Loading Server...")
-	srv := server.New(cfg, vs, db)
-
 	// Import
-	if len(os.Args) > 2 {
+	if len(os.Args) > 1 {
 		logger.Sugar().Info("Loading Wikipedia...")
-		go ImportWikipedia(appCtx, db, srv, os.Args[2], len(cfg.AI.Embed.Url)*10, len(os.Args) <= 3)
-	}
-	if len(os.Args) > 3 {
-		logger.Sugar().Info("Refreshing Centroids...")
-		go vs.RefreshCentroids(appCtx)
+		err = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL)).ImportFromFile(appCtx, os.Args[1])
+		if err != nil {
+			logger.Sugar().Fatalf("wikipedia import: %v", err)
+		}
+		return
 	}
 
 	// Create mux
@@ -129,7 +113,7 @@ func main() {
 		TLSConfig: &tls.Config{
 			GetCertificate: cfg.TLS.GetCertificate,
 			ClientAuth:     tls.NoClientCert,
-			NextProtos:     []string{"h2", "http/1.1"}, // Enable HTTP/2
+			NextProtos:     []string{"h2", "http/1.1"},
 		},
 	}
 	err = http2.ConfigureServer(&server2, &http2.Server{})
@@ -186,10 +170,7 @@ func main() {
 		})
 	}
 
-	// Routes: API
-	mux.Handle("/api/search", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.SearchHttp)))))
-	mux.Handle("/api/count", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.CountHttp)))))
-	mux.Handle("/api/ai", middlewareHeaders(middlewareDecompression(http.HandlerFunc(srv.AIHttp))))
+	// Routes: API todo
 
 	// Routes: Files
 	mux.Handle("/", middlewareHeaders(middlewareDecompression(middlewareCompression(http.FileServerFS(static.Files)))))

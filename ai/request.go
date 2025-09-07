@@ -18,10 +18,12 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 		return nil, fmt.Errorf("no available servers")
 	}
 
-	binaryData := encoding.Encode(reqBody)
-	compressed := c.encoder.EncodeAll(binaryData, nil)
+	data, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed marshal request: %w", err)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", srv.url+endpoint, bytes.NewReader(compressed))
+	req, err := http.NewRequestWithContext(ctx, "POST", srv.url+endpoint, bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -29,8 +31,6 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Content-Encoding", "zstd")
 	req.Header.Set("Accept-Encoding", "zstd")
-	req.Header.Set("Encode-Binary", "true")
-	req.Header.Set("Accept-Binary", "true")
 	if queryType != "" {
 		req.Header.Set("Query-Type", queryType)
 	}
@@ -69,18 +69,11 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 		decompressed = body
 	}
 
-	var data []byte
 	if resp.Header.Get("Encode-Binary") == "true" {
 		raw, _ := encoding.Decode(decompressed)
-		data, err = json.Marshal(raw)
-		if err != nil {
-			return nil, fmt.Errorf("failed to json encode the decoded response: %w", err)
-		}
-	} else {
-		data = decompressed
+		return respBody, encoding.Engrain(raw.(map[string]any), respBody)
 	}
-
-	return unmarshalResponse(data, respBody)
+	return unmarshalResponse(decompressed, respBody)
 }
 
 func (c *client) doRequest(ctx context.Context, endpoint string, reqBody any, respBody any) (any, error) {
