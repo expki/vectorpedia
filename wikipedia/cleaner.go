@@ -17,6 +17,7 @@ var (
 	infoboxRe      = regexp.MustCompile(`(?s)\{\{[Ii]nfobox.*?\}\}`)
 	templateRe     = regexp.MustCompile(`\{\{[^}]+\}\}`)
 	refRe          = regexp.MustCompile(`(?s)<ref[^>]*>.*?</ref>`)
+	refTagRe       = regexp.MustCompile(`<ref[^/>]*/>|<ref\s+[^>]+/>`)
 	commentRe      = regexp.MustCompile(`(?s)<!--.*?-->`)
 	categoryRe     = regexp.MustCompile(`\[\[Category:.*?\]\]`)
 	fileRe         = regexp.MustCompile(`\[\[File:.*?\]\]|\[\[Image:.*?\]\]`)
@@ -33,6 +34,8 @@ var (
 	doiRe          = regexp.MustCompile(`doi:\s*[\S]+`)
 	pmidRe         = regexp.MustCompile(`PMID\s+\d+`)
 	arxivRe        = regexp.MustCompile(`arXiv:\s*[\S]+`)
+	boldItalicRe   = regexp.MustCompile(`'{2,5}`)
+	parenRe        = regexp.MustCompile(`\s*\([^)]*\)\s*`)
 )
 
 // cleanWikiMarkup removes Wikipedia markup from text and returns only paragraph text
@@ -48,6 +51,7 @@ func cleanWikiMarkup(text string) string {
 	// Remove various wiki markup elements in order of precedence
 	text = commentRe.ReplaceAllString(text, "")          // HTML comments
 	text = refRe.ReplaceAllString(text, "")              // References with content
+	text = refTagRe.ReplaceAllString(text, "")           // Self-closing ref tags like <ref name="foo"/>
 	text = reflistRe.ReplaceAllString(text, "")          // Reference lists
 	text = bibliographyRe.ReplaceAllString(text, "")     // Bibliography templates
 	text = galleryRe.ReplaceAllString(text, "")          // Gallery tags
@@ -73,6 +77,12 @@ func cleanWikiMarkup(text string) string {
 	// Convert wiki links to plain text (keep link text, remove markup)
 	text = wikiRe.ReplaceAllString(text, "$2")
 
+	// Remove bold and italic markup (''', '''', '', etc.)
+	text = boldItalicRe.ReplaceAllString(text, "")
+
+	// Remove parenthetical content (often contains less relevant details)
+	text = parenRe.ReplaceAllString(text, " ")
+
 	// Remove any remaining brackets and braces
 	text = strings.ReplaceAll(text, "[[", "")
 	text = strings.ReplaceAll(text, "]]", "")
@@ -80,6 +90,8 @@ func cleanWikiMarkup(text string) string {
 	text = strings.ReplaceAll(text, "}}", "")
 	text = strings.ReplaceAll(text, "<ref>", "")
 	text = strings.ReplaceAll(text, "</ref>", "")
+	text = strings.ReplaceAll(text, "<ref", "")
+	text = strings.ReplaceAll(text, "/>", "")
 
 	// Remove HTML entities
 	text = entityRe.ReplaceAllString(text, " ")
