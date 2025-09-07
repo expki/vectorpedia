@@ -18,8 +18,11 @@ func CreateSample(path string) error {
 			IP:               []string{},
 			Certificates:     []*ConfigTLSPath{},
 		},
-		URL:   []string{"https://localhost:5000"},
-		Token: "your-token",
+		URL:           []string{"https://localhost:5000"},
+		Token:         "your-token",
+		CtxSizeChat:   2048,
+		CtxSizeEmbed:  512,
+		CtxSizeRerank: 2048,
 		Database: Database{
 			Sqlite:   "./vectorstore.db",
 			LogLevel: LogLevelError,

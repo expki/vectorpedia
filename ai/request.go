@@ -34,6 +34,9 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 	if queryType != "" {
 		req.Header.Set("Query-Type", queryType)
 	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	httpClient, err := c.getHTTPClient()
 	if err != nil {

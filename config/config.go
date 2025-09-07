@@ -15,12 +15,15 @@ func ParseConfig(raw []byte) (config Config, err error) {
 }
 
 type Config struct {
-	Server   ConfigServer          `json:"server"`
-	TLS      ConfigTLS             `json:"tls"`
-	Database Database              `json:"database"`
-	URL      SingleOrSlice[string] `json:"url"`
-	Token    string                `json:"token"`
-	LogLevel LogLevel              `json:"log_level"`
+	Server        ConfigServer          `json:"server"`
+	TLS           ConfigTLS             `json:"tls"`
+	Database      Database              `json:"database"`
+	URL           SingleOrSlice[string] `json:"url"`
+	Token         string                `json:"token"`
+	CtxSizeChat   uint                  `json:"ctx_size_chat"`
+	CtxSizeEmbed  uint                  `json:"ctx_size_embed"`
+	CtxSizeRerank uint                  `json:"ctx_size_rerank"`
+	LogLevel      LogLevel              `json:"log_level"`
 }
 
 type ConfigServer struct {

@@ -46,6 +46,7 @@ type Client interface {
 }
 
 type client struct {
+	token          string
 	servers        []*server
 	httpClient     *http.Client
 	clientRequests atomic.Int64
@@ -66,7 +67,7 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
-func NewClient(urls []string) (Client, error) {
+func NewClient(urls []string, token string) (Client, error) {
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("at least one URL must be provided")
 	}
@@ -94,6 +95,7 @@ func NewClient(urls []string) (Client, error) {
 	}
 
 	return &client{
+		token:      token,
 		servers:    servers,
 		httpClient: httpClient,
 		encoder:    encoder,
