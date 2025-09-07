@@ -105,18 +105,19 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	contentEmbeddings := make([]*database.Embedding, 0, len(chunks))
 	for i := 2; i < len(embeddings); i++ {
 		contentEmbeddings = append(contentEmbeddings, &database.Embedding{
-			Vector:    embeddings[i],
-			IsContent: true,
+			Vector: embeddings[i],
+			Source: database.EmbeddingSource_Content,
 		})
 	}
 
 	// Create database models
 	dbPage := &database.Page{
+		Uri: GenerateWikipediaURL(title),
 		Title: &database.Title{
 			Text: title,
 			Embedding: &database.Embedding{
-				Vector:  titleEmbedding,
-				IsTitle: true,
+				Vector: titleEmbedding,
+				Source: database.EmbeddingSource_Title,
 			},
 		},
 		Content: &database.Content{
@@ -126,8 +127,8 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 		Summary: &database.Summary{
 			Text: summary,
 			Embedding: &database.Embedding{
-				Vector:    summaryEmbedding,
-				IsSummary: true,
+				Vector: summaryEmbedding,
+				Source: database.EmbeddingSource_Summary,
 			},
 		},
 	}
@@ -278,23 +279,23 @@ func (w *Wikipedia) GetMetrics() ProcessingMetrics {
 
 	return ProcessingMetrics{
 		EmbeddingTimeTotal:       atomic.LoadInt64(&w.metrics.EmbeddingTimeTotal),
-		EmbeddingCount:          atomic.LoadInt64(&w.metrics.EmbeddingCount),
-		SummaryTimeTotal:        atomic.LoadInt64(&w.metrics.SummaryTimeTotal),
-		SummaryCount:            atomic.LoadInt64(&w.metrics.SummaryCount),
-		InsertTimeTotal:         atomic.LoadInt64(&w.metrics.InsertTimeTotal),
-		InsertCount:             atomic.LoadInt64(&w.metrics.InsertCount),
-		ProcessPageTimeTotal:    atomic.LoadInt64(&w.metrics.ProcessPageTimeTotal),
-		ProcessPageCount:        atomic.LoadInt64(&w.metrics.ProcessPageCount),
-		TokenizeChatTimeTotal:   atomic.LoadInt64(&w.metrics.TokenizeChatTimeTotal),
-		TokenizeChatCount:       atomic.LoadInt64(&w.metrics.TokenizeChatCount),
-		TokenizeEmbedTimeTotal:  atomic.LoadInt64(&w.metrics.TokenizeEmbedTimeTotal),
-		TokenizeEmbedCount:      atomic.LoadInt64(&w.metrics.TokenizeEmbedCount),
-		DetokenizeChatTimeTotal: atomic.LoadInt64(&w.metrics.DetokenizeChatTimeTotal),
-		DetokenizeChatCount:     atomic.LoadInt64(&w.metrics.DetokenizeChatCount),
+		EmbeddingCount:           atomic.LoadInt64(&w.metrics.EmbeddingCount),
+		SummaryTimeTotal:         atomic.LoadInt64(&w.metrics.SummaryTimeTotal),
+		SummaryCount:             atomic.LoadInt64(&w.metrics.SummaryCount),
+		InsertTimeTotal:          atomic.LoadInt64(&w.metrics.InsertTimeTotal),
+		InsertCount:              atomic.LoadInt64(&w.metrics.InsertCount),
+		ProcessPageTimeTotal:     atomic.LoadInt64(&w.metrics.ProcessPageTimeTotal),
+		ProcessPageCount:         atomic.LoadInt64(&w.metrics.ProcessPageCount),
+		TokenizeChatTimeTotal:    atomic.LoadInt64(&w.metrics.TokenizeChatTimeTotal),
+		TokenizeChatCount:        atomic.LoadInt64(&w.metrics.TokenizeChatCount),
+		TokenizeEmbedTimeTotal:   atomic.LoadInt64(&w.metrics.TokenizeEmbedTimeTotal),
+		TokenizeEmbedCount:       atomic.LoadInt64(&w.metrics.TokenizeEmbedCount),
+		DetokenizeChatTimeTotal:  atomic.LoadInt64(&w.metrics.DetokenizeChatTimeTotal),
+		DetokenizeChatCount:      atomic.LoadInt64(&w.metrics.DetokenizeChatCount),
 		DetokenizeEmbedTimeTotal: atomic.LoadInt64(&w.metrics.DetokenizeEmbedTimeTotal),
-		DetokenizeEmbedCount:    atomic.LoadInt64(&w.metrics.DetokenizeEmbedCount),
-		ImportStartTime:         w.metrics.ImportStartTime,
-		PagesPerMinute:          w.metrics.PagesPerMinute,
+		DetokenizeEmbedCount:     atomic.LoadInt64(&w.metrics.DetokenizeEmbedCount),
+		ImportStartTime:          w.metrics.ImportStartTime,
+		PagesPerMinute:           w.metrics.PagesPerMinute,
 	}
 }
 

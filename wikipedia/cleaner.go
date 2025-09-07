@@ -7,72 +7,190 @@ import (
 )
 
 var (
-	urlRe       = regexp.MustCompile(`http[s]?://\S+`)
-	tableRe     = regexp.MustCompile(`(?s)\{\|.*?\|\}`)
-	htmlTableRe = regexp.MustCompile(`(?s)<table.*?>.*?</table>`)
-	entityRe    = regexp.MustCompile(`&[a-zA-Z0-9#]+;`)
+	urlRe          = regexp.MustCompile(`http[s]?://\S+`)
+	tableRe        = regexp.MustCompile(`(?s)\{\|.*?\|\}`)
+	htmlTableRe    = regexp.MustCompile(`(?s)<table.*?>.*?</table>`)
+	entityRe       = regexp.MustCompile(`&[a-zA-Z0-9#]+;`)
+	headingRe      = regexp.MustCompile(`(?m)^=+.*?=+\s*$`)
+	galleryRe      = regexp.MustCompile(`(?s)<gallery.*?>.*?</gallery>`)
+	redirectRe     = regexp.MustCompile(`(?i)#REDIRECT\s*\[\[.*?\]\]`)
+	infoboxRe      = regexp.MustCompile(`(?s)\{\{[Ii]nfobox.*?\}\}`)
+	templateRe     = regexp.MustCompile(`\{\{[^}]+\}\}`)
+	refRe          = regexp.MustCompile(`(?s)<ref[^>]*>.*?</ref>`)
+	commentRe      = regexp.MustCompile(`(?s)<!--.*?-->`)
+	categoryRe     = regexp.MustCompile(`\[\[Category:.*?\]\]`)
+	fileRe         = regexp.MustCompile(`\[\[File:.*?\]\]|\[\[Image:.*?\]\]`)
+	portalRe       = regexp.MustCompile(`(?i)\{\{[Pp]ortal.*?\}\}|Portal\|[^}]+`)
+	mainRe         = regexp.MustCompile(`(?i)\{\{[Mm]ain\|.*?\}\}|Main\|[^}]+`)
+	seeAlsoRe      = regexp.MustCompile(`(?i)\{\{[Ss]ee also.*?\}\}`)
+	citationRe     = regexp.MustCompile(`(?i)\{\{[Cc]it[ae].*?\}\}|\{\{[Cc]itation.*?\}\}`)
+	authorityRe    = regexp.MustCompile(`(?i)\{\{[Aa]uthority control.*?\}\}`)
+	commonsCatRe   = regexp.MustCompile(`(?i)\{\{[Cc]ommons category.*?\}\}|Commons category`)
+	wikiRe         = regexp.MustCompile(`\[\[([^|\]]+\|)?([^\]]+)\]\]`)
+	reflistRe      = regexp.MustCompile(`(?i)\{\{[Rr]eflist.*?\}\}|\{\{[Rr]efs.*?\}\}`)
+	bibliographyRe = regexp.MustCompile(`(?i)\{\{[Bb]ibliography.*?\}\}`)
+	isbnRe         = regexp.MustCompile(`ISBN\s+[\d\-X]+`)
+	doiRe          = regexp.MustCompile(`doi:\s*[\S]+`)
+	pmidRe         = regexp.MustCompile(`PMID\s+\d+`)
+	arxivRe        = regexp.MustCompile(`arXiv:\s*[\S]+`)
 )
 
-// cleanWikiMarkup removes Wikipedia markup from text
+// cleanWikiMarkup removes Wikipedia markup from text and returns only paragraph text
 func cleanWikiMarkup(text string) string {
-	// Remove internal wiki link brackets and template markers
-	replacements := []struct {
-		old string
-		new string
-	}{
-		{"[[", ""},
-		{"]]", ""},
-		{"{{", ""},
-		{"}}", ""},
-		{"<ref>", ""},
-		{"</ref>", ""},
-	}
-	for _, r := range replacements {
-		text = strings.ReplaceAll(text, r.old, r.new)
+	// Remove redirect pages entirely
+	if redirectRe.MatchString(text) {
+		return ""
 	}
 
-	// Remove external URLs (http or https links)
-	text = urlRe.ReplaceAllString(text, "")
+	// First, remove entire sections that are not useful for LLM training
+	text = removeBibliographicSections(text)
 
-	// Remove wikicode tables (e.g. starting with {| and ending with |})
-	text = tableRe.ReplaceAllString(text, "")
+	// Remove various wiki markup elements in order of precedence
+	text = commentRe.ReplaceAllString(text, "")          // HTML comments
+	text = refRe.ReplaceAllString(text, "")              // References with content
+	text = reflistRe.ReplaceAllString(text, "")          // Reference lists
+	text = bibliographyRe.ReplaceAllString(text, "")     // Bibliography templates
+	text = galleryRe.ReplaceAllString(text, "")          // Gallery tags
+	text = infoboxRe.ReplaceAllString(text, "")          // Infoboxes (must be before general templates)
+	text = tableRe.ReplaceAllString(text, "")            // Wiki tables
+	text = htmlTableRe.ReplaceAllString(text, "")        // HTML tables
+	text = categoryRe.ReplaceAllString(text, "")         // Category links
+	text = fileRe.ReplaceAllString(text, "")             // File/Image links
+	text = portalRe.ReplaceAllString(text, "")           // Portal links
+	text = mainRe.ReplaceAllString(text, "")             // Main article links
+	text = seeAlsoRe.ReplaceAllString(text, "")          // See also links
+	text = citationRe.ReplaceAllString(text, "")         // Citations
+	text = authorityRe.ReplaceAllString(text, "")        // Authority control
+	text = commonsCatRe.ReplaceAllString(text, "")       // Commons category
+	text = isbnRe.ReplaceAllString(text, "")             // ISBN numbers
+	text = doiRe.ReplaceAllString(text, "")              // DOI references
+	text = pmidRe.ReplaceAllString(text, "")             // PubMed IDs
+	text = arxivRe.ReplaceAllString(text, "")            // arXiv references
+	text = headingRe.ReplaceAllString(text, "")          // Section headings
+	text = templateRe.ReplaceAllString(text, "")         // Remaining templates
+	text = urlRe.ReplaceAllString(text, "")              // External URLs
 
-	// Remove HTML tables if any (using non-greedy matching)
-	text = htmlTableRe.ReplaceAllString(text, "")
+	// Convert wiki links to plain text (keep link text, remove markup)
+	text = wikiRe.ReplaceAllString(text, "$2")
 
-	// Remove HTML entities such as &ndash; using a regular expression
-	text = entityRe.ReplaceAllString(text, "")
+	// Remove any remaining brackets and braces
+	text = strings.ReplaceAll(text, "[[", "")
+	text = strings.ReplaceAll(text, "]]", "")
+	text = strings.ReplaceAll(text, "{{", "")
+	text = strings.ReplaceAll(text, "}}", "")
+	text = strings.ReplaceAll(text, "<ref>", "")
+	text = strings.ReplaceAll(text, "</ref>", "")
 
-	// Remove lines that likely contain non-text content (e.g., file references, table legends)
-	text = removeNonTextLines(text)
+	// Remove HTML entities
+	text = entityRe.ReplaceAllString(text, " ")
+
+	// Process lines to extract only paragraph text
+	text = extractParagraphText(text)
 
 	return strings.TrimSpace(text)
 }
 
-// removeNonTextLines filters out lines that are likely to be non-text content
-func removeNonTextLines(text string) string {
+// removeBibliographicSections removes entire reference/bibliography sections
+func removeBibliographicSections(text string) string {
+	// Common section headers for references and sources
+	sectionHeaders := []string{
+		"== References ==",
+		"== Sources ==",
+		"== Bibliography ==",
+		"== Further reading ==",
+		"== External links ==",
+		"== Notes ==",
+		"== Footnotes ==",
+		"== Citations ==",
+		"== Works cited ==",
+		"== Literature ==",
+		"== Publications ==",
+	}
+	
+	lower := strings.ToLower(text)
+	earliestIdx := len(text)
+	
+	// Find the earliest occurrence of any reference section
+	for _, header := range sectionHeaders {
+		idx := strings.Index(lower, strings.ToLower(header))
+		if idx != -1 && idx < earliestIdx {
+			earliestIdx = idx
+		}
+	}
+	
+	// If we found a reference section, truncate the text there
+	if earliestIdx < len(text) {
+		text = text[:earliestIdx]
+	}
+	
+	return text
+}
+
+// extractParagraphText filters text to keep only paragraph sentences
+func extractParagraphText(text string) string {
 	lines := strings.Split(text, "\n")
-	var filtered []string
+	var paragraphs []string
+	var currentPara []string
+	
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		
+		// Skip empty lines
 		if trimmed == "" {
+			// If we have accumulated paragraph text, save it
+			if len(currentPara) > 0 {
+				paragraphs = append(paragraphs, strings.Join(currentPara, " "))
+				currentPara = nil
+			}
 			continue
 		}
-		// Remove lines starting with "File:" (case-insensitive)
-		if strings.HasPrefix(strings.ToLower(trimmed), "file:") {
+		
+		// Skip lines that are just metadata or formatting
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "file:") ||
+			strings.HasPrefix(lower, "image:") ||
+			strings.HasPrefix(lower, "category:") ||
+			strings.HasPrefix(lower, "thumb|") ||
+			strings.HasPrefix(lower, "right|") ||
+			strings.HasPrefix(lower, "left|") ||
+			strings.HasPrefix(lower, "center|") ||
+			strings.Contains(trimmed, "|legend|") ||
+			strings.Contains(trimmed, "|caption|") ||
+			strings.HasPrefix(trimmed, "|") ||
+			strings.HasPrefix(trimmed, "!") ||
+			strings.HasPrefix(trimmed, "*") ||
+			strings.HasPrefix(trimmed, "#") ||
+			strings.HasPrefix(trimmed, ":") ||
+			strings.HasPrefix(trimmed, ";") {
 			continue
 		}
-		// Remove lines that include "|legend|" (table legends)
-		if strings.Contains(trimmed, "|legend|") {
+		
+		// Skip lines with excessive pipes (likely table data)
+		if strings.Count(trimmed, "|") > 2 {
 			continue
 		}
-		// If the line contains more than one pipe and is not a section header, skip it
-		if strings.Count(trimmed, "|") > 1 && !strings.HasPrefix(trimmed, "==") {
+		
+		// Skip very short lines that are likely not sentences
+		if len(trimmed) < 20 && !strings.ContainsAny(trimmed, ".!?") {
 			continue
 		}
-		filtered = append(filtered, line)
+		
+		// This looks like actual paragraph text
+		currentPara = append(currentPara, trimmed)
 	}
-	return strings.Join(filtered, "\n")
+	
+	// Don't forget the last paragraph
+	if len(currentPara) > 0 {
+		paragraphs = append(paragraphs, strings.Join(currentPara, " "))
+	}
+	
+	// Join all paragraphs with a space (single continuous text)
+	result := strings.Join(paragraphs, " ")
+	
+	// Clean up excessive whitespace
+	result = regexp.MustCompile(`\s+`).ReplaceAllString(result, " ")
+	
+	return result
 }
 
 // isDisambiguationPage checks if a page is a disambiguation page

@@ -2,6 +2,7 @@ package database
 
 type Page struct {
 	ID        uint64   `gorm:"primaryKey;not null"`
+	Uri       string   `gorm:"not null"`
 	TitleID   uint64   `gorm:"not null"`
 	Title     *Title   `gorm:"foreignKey:TitleID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 	ContentID uint64   `gorm:"not null"`
@@ -31,13 +32,11 @@ type Summary struct {
 }
 
 type Embedding struct {
-	ID         uint64    `gorm:"primaryKey;not null"`
-	Vector     []byte    `gorm:"not null"`
-	IsTitle    bool      `gorm:"not null;index"`
-	IsSummary  bool      `gorm:"not null;index"`
-	IsContent  bool      `gorm:"not null;index"`
-	CentroidID *uint64   `gorm:"index"`
-	Centroid   *Centroid `gorm:"foreignKey:CentroidID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+	ID         uint64          `gorm:"primaryKey;not null"`
+	Vector     []byte          `gorm:"not null"`
+	Source     EmbeddingSource `gorm:"not null;index"`
+	CentroidID *uint64         `gorm:"index"`
+	Centroid   *Centroid       `gorm:"foreignKey:CentroidID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
 }
 
 type Centroid struct {
@@ -45,3 +44,12 @@ type Centroid struct {
 	Vector     []byte       `gorm:"not null"`
 	Embeddings []*Embedding `gorm:"foreignKey:CentroidID"`
 }
+
+type EmbeddingSource uint8
+
+const (
+	EmbeddingSource_Unknown EmbeddingSource = iota
+	EmbeddingSource_Title
+	EmbeddingSource_Summary
+	EmbeddingSource_Content
+)
