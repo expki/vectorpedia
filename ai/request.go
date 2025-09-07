@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-
-	"github.com/expki/calculator/lib/encoding"
 )
 
 func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, reqBody any, respBody any, queryType string) (any, error) {
@@ -69,10 +67,6 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 		decompressed = body
 	}
 
-	if resp.Header.Get("Encode-Binary") == "true" {
-		raw, _ := encoding.Decode(decompressed)
-		return respBody, encoding.Engrain(raw.(map[string]any), respBody)
-	}
 	return unmarshalResponse(decompressed, respBody)
 }
 
