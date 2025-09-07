@@ -5,12 +5,14 @@ import (
 
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -25,6 +27,24 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
+
+// ProcessingStatisticsJSON represents processing metrics in JSON format
+type ProcessingStatisticsJSON struct {
+	AverageEmbeddingTimeMs float64 `json:"average_embedding_time_ms"`
+	AverageSummaryTimeMs   float64 `json:"average_summary_time_ms"`
+	AverageInsertTimeMs    float64 `json:"average_insert_time_ms"`
+	TotalEmbeddings        int64   `json:"total_embeddings"`
+	TotalSummaries         int64   `json:"total_summaries"`
+	TotalInserts           int64   `json:"total_inserts"`
+}
+
+// calculateAverage calculates average time in milliseconds
+func calculateAverage(totalNanos int64, count int64) float64 {
+	if count == 0 {
+		return 0
+	}
+	return float64(totalNanos) / float64(count) / 1_000_000.0 // Convert nanoseconds to milliseconds
+}
 
 func main() {
 	//go func() {
@@ -87,10 +107,15 @@ func main() {
 		logger.Sugar().Fatalf("database.New: %v", err)
 	}
 
+	// Create Wikipedia instance (store it for metrics)
+	var wikipediaInstance *wikipedia.Wikipedia
+	var wikipediaLock sync.RWMutex
+
 	// Import
-	if len(os.Args) > 1 {
+	if len(os.Args) > 2 {
 		logger.Sugar().Info("Loading Wikipedia...")
-		err = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL)).ImportFromFile(appCtx, os.Args[1])
+		wikipediaInstance = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL))
+		err = wikipediaInstance.ImportFromFile(appCtx, os.Args[2])
 		if err != nil {
 			logger.Sugar().Fatalf("wikipedia import: %v", err)
 		}
@@ -170,7 +195,44 @@ func main() {
 		})
 	}
 
-	// Routes: API todo
+	// Routes: API
+	// Statistics endpoint
+	mux.HandleFunc("/api/statistics", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Prepare statistics response
+		stats := struct {
+			Servers    ai.ClientStatistics        `json:"servers"`
+			Processing *ProcessingStatisticsJSON  `json:"processing,omitempty"`
+		}{
+			Servers: aiClient.GetStatistics(),
+		}
+
+		// Add Wikipedia processing metrics if available
+		wikipediaLock.RLock()
+		if wikipediaInstance != nil {
+			metrics := wikipediaInstance.GetMetrics()
+			stats.Processing = &ProcessingStatisticsJSON{
+				AverageEmbeddingTimeMs: calculateAverage(metrics.EmbeddingTimeTotal, metrics.EmbeddingCount),
+				AverageSummaryTimeMs:   calculateAverage(metrics.SummaryTimeTotal, metrics.SummaryCount),
+				AverageInsertTimeMs:    calculateAverage(metrics.InsertTimeTotal, metrics.InsertCount),
+				TotalEmbeddings:        metrics.EmbeddingCount,
+				TotalSummaries:         metrics.SummaryCount,
+				TotalInserts:           metrics.InsertCount,
+			}
+		}
+		wikipediaLock.RUnlock()
+
+		// Set headers and encode response
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(stats); err != nil {
+			logger.Sugar().Errorf("Failed to encode statistics: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
+	})
 
 	// Routes: Files
 	mux.Handle("/", middlewareHeaders(middlewareDecompression(middlewareCompression(http.FileServerFS(static.Files)))))

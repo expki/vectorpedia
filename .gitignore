@@ -4,3 +4,5 @@ config.json
 vectorstore.db
 progress.dat
 *.bz2
+*.md
+!README.md

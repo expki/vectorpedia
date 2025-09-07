@@ -45,6 +45,9 @@ type Client interface {
 
 	// Close cleans up resources used by the client
 	Close()
+
+	// GetStatistics returns server statistics
+	GetStatistics() ClientStatistics
 }
 
 type client struct {
@@ -62,6 +65,7 @@ type client struct {
 type server struct {
 	url            string
 	activeRequests atomic.Int64
+	totalRequests  atomic.Int64
 	isHealthy      atomic.Bool
 }
 
@@ -69,6 +73,17 @@ type Usage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+type ServerStatistics struct {
+	URL             string `json:"url"`
+	IsHealthy       bool   `json:"is_healthy"`
+	TotalRequests   int64  `json:"total_requests"`
+	ActiveRequests  int64  `json:"active_requests"`
+}
+
+type ClientStatistics struct {
+	Servers []ServerStatistics `json:"servers"`
 }
 
 func NewClient(appCtx context.Context, urls []string, token string) (Client, error) {
@@ -183,6 +198,7 @@ func (c *client) selectServer() (*server, func()) {
 	}
 
 	server.activeRequests.Add(1)
+	server.totalRequests.Add(1)
 	return server, func() {
 		server.activeRequests.Add(-1)
 	}
@@ -240,4 +256,24 @@ func (c *client) checkServerHealth(srv *server) {
 			logger.Sugar().Warnf("server is down: %s", srv.url)
 		}
 	}
+}
+
+func (c *client) GetStatistics() ClientStatistics {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	stats := ClientStatistics{
+		Servers: make([]ServerStatistics, len(c.servers)),
+	}
+
+	for i, srv := range c.servers {
+		stats.Servers[i] = ServerStatistics{
+			URL:            srv.url,
+			IsHealthy:      srv.isHealthy.Load(),
+			TotalRequests:  srv.totalRequests.Load(),
+			ActiveRequests: srv.activeRequests.Load(),
+		}
+	}
+
+	return stats
 }

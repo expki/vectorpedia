@@ -6,14 +6,8 @@ fi
 mkdir -p build
 printf "Go: Building...\n"
 GOAMD64=v2 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o build/vectorpedia .
+printf "Go: Building AVX2...\n"
+GOAMD64=v3 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o build/vectorpedia-avx2 .
 printf "Go: Building AVX512...\n"
 GOAMD64=v4 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -o build/vectorpedia-avx512 .
-printf "Gonum: Building...\n"
-GOAMD64=v2 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -tags="gonum" -o build/vectorpedia-gonum .
-printf "Gonum: Building AVX512...\n"
-GOAMD64=v4 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -tags="gonum" -o build/vectorpedia-gonum-avx512 .
-printf "Gorgonia: Building...\n"
-GOAMD64=v2 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -tags="gorgonia" -o build/vectorpedia-gorgonia .
-printf "Gorgonia: Building AVX512...\n"
-GOAMD64=v4 GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -tags="gorgonia avx" -o build/vectorpedia-gorgonia-avx512 .
 printf "Build completed.\n"

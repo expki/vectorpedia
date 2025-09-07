@@ -8,6 +8,16 @@ import (
 	"github.com/expki/vectorpedia/database"
 )
 
+// ProcessingMetrics holds timing statistics for page processing
+type ProcessingMetrics struct {
+	EmbeddingTimeTotal   int64 // Total time in nanoseconds
+	EmbeddingCount       int64
+	SummaryTimeTotal     int64 // Total time in nanoseconds
+	SummaryCount         int64
+	InsertTimeTotal      int64 // Total time in nanoseconds
+	InsertCount          int64
+}
+
 // Wikipedia manages the import process
 type Wikipedia struct {
 	importedLock      sync.RWMutex
@@ -18,6 +28,8 @@ type Wikipedia struct {
 	contextSizeEmbed  uint
 	contextSizeRerank uint
 	concurrent        chan struct{}
+	metrics           ProcessingMetrics
+	metricsLock       sync.RWMutex
 }
 
 // Page represents a Wikipedia page with full content

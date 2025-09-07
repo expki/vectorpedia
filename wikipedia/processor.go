@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/cespare/xxhash"
@@ -57,20 +58,29 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 
-	// Generate summary using AI
-	summary, err := w.GenerateSummary(reqCtx, title, cleanText)
-	if err != nil {
-		return fmt.Errorf("failed to generate summary for '%s': %w", title, err)
-	}
-
 	// Generate embeddings for title
+	embedStart := time.Now()
 	titleEmbedding, err := w.GenerateEmbedding(reqCtx, title)
+	embedDuration := time.Since(embedStart).Nanoseconds()
+	w.updateMetrics(embedDuration, 0, 0, "embedding")
 	if err != nil {
 		return fmt.Errorf("failed to generate title embedding for '%s': %w", title, err)
 	}
 
+	// Generate summary using AI
+	summaryStart := time.Now()
+	summary, err := w.GenerateSummary(reqCtx, title, cleanText)
+	summaryDuration := time.Since(summaryStart).Nanoseconds()
+	w.updateMetrics(0, summaryDuration, 0, "summary")
+	if err != nil {
+		return fmt.Errorf("failed to generate summary for '%s': %w", title, err)
+	}
+
 	// Generate embedding for summary
+	embedStart = time.Now()
 	summaryEmbedding, err := w.GenerateEmbedding(reqCtx, summary)
+	embedDuration = time.Since(embedStart).Nanoseconds()
+	w.updateMetrics(embedDuration, 0, 0, "embedding")
 	if err != nil {
 		return fmt.Errorf("failed to generate summary embedding for '%s': %w", title, err)
 	}
@@ -80,7 +90,10 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	contentEmbeddings := make([]*database.Embedding, 0, len(chunks))
 
 	for _, chunk := range chunks {
+		embedStart := time.Now()
 		embedding, err := w.GenerateEmbedding(reqCtx, chunk)
+		embedDuration := time.Since(embedStart).Nanoseconds()
+		w.updateMetrics(embedDuration, 0, 0, "embedding")
 		if err != nil {
 			fmt.Printf("Failed to generate content embedding for '%s': %v\n", title, err)
 			continue
@@ -114,9 +127,12 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	}
 
 	// Insert page directly into database
+	insertStart := time.Now()
 	if err := w.InsertPage(reqCtx, dbPage); err != nil {
 		return fmt.Errorf("failed to insert page '%s': %w", title, err)
 	}
+	insertDuration := time.Since(insertStart).Nanoseconds()
+	w.updateMetrics(0, 0, insertDuration, "insert")
 
 	w.Record(title)
 	return nil
@@ -186,4 +202,37 @@ func chunkContent(content string, ctxEmbed uint) []string {
 	}
 
 	return chunks
+}
+
+// updateMetrics updates processing metrics in a thread-safe manner
+func (w *Wikipedia) updateMetrics(embedTime, summaryTime, insertTime int64, metricType string) {
+	w.metricsLock.Lock()
+	defer w.metricsLock.Unlock()
+
+	switch metricType {
+	case "embedding":
+		atomic.AddInt64(&w.metrics.EmbeddingTimeTotal, embedTime)
+		atomic.AddInt64(&w.metrics.EmbeddingCount, 1)
+	case "summary":
+		atomic.AddInt64(&w.metrics.SummaryTimeTotal, summaryTime)
+		atomic.AddInt64(&w.metrics.SummaryCount, 1)
+	case "insert":
+		atomic.AddInt64(&w.metrics.InsertTimeTotal, insertTime)
+		atomic.AddInt64(&w.metrics.InsertCount, 1)
+	}
+}
+
+// GetMetrics returns processing metrics
+func (w *Wikipedia) GetMetrics() ProcessingMetrics {
+	w.metricsLock.RLock()
+	defer w.metricsLock.RUnlock()
+
+	return ProcessingMetrics{
+		EmbeddingTimeTotal: atomic.LoadInt64(&w.metrics.EmbeddingTimeTotal),
+		EmbeddingCount:     atomic.LoadInt64(&w.metrics.EmbeddingCount),
+		SummaryTimeTotal:   atomic.LoadInt64(&w.metrics.SummaryTimeTotal),
+		SummaryCount:       atomic.LoadInt64(&w.metrics.SummaryCount),
+		InsertTimeTotal:    atomic.LoadInt64(&w.metrics.InsertTimeTotal),
+		InsertCount:        atomic.LoadInt64(&w.metrics.InsertCount),
+	}
 }
