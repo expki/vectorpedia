@@ -2,11 +2,12 @@ package wikipedia
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
+	"sort"
 
 	"github.com/expki/vectorpedia/ai"
+	"github.com/expki/vectorpedia/compute"
 )
 
 // GenerateSummary generates a summary for a Wikipedia article using AI
@@ -46,9 +47,13 @@ func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) 
 }
 
 // GenerateEmbedding generates an embedding for the given text
-func (w *Wikipedia) GenerateEmbedding(ctx context.Context, text string) ([]byte, error) {
+func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]byte, error) {
+	input := make([]string, 0, len(texts))
+	for _, text := range texts {
+		input = append(input, truncate(text, int(w.contextSizeEmbed)))
+	}
 	req := &ai.EmbedRequest{
-		Input: []string{truncate(text, int(w.contextSizeEmbed))},
+		Input: input,
 	}
 
 	resp, err := w.client.Embed(ctx, req)
@@ -56,20 +61,19 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, text string) ([]byte,
 		return nil, err
 	}
 
-	if len(resp.Data) == 0 {
-		return nil, fmt.Errorf("no embedding returned")
+	if len(resp.Data) != 0 {
+		return nil, fmt.Errorf("no embedding returned: %d != %d", len(resp.Data), len(texts))
 	}
 
-	// Convert float32 slice to byte slice for storage
-	embedding := resp.Data[0].Embedding
-	bytes := make([]byte, len(embedding)*4)
-	for i, f := range embedding {
-		// Convert float32 to bytes (little-endian)
-		bits := math.Float32bits(f)
-		binary.LittleEndian.PutUint32(bytes[i*4:], bits)
+	output := make([][]byte, 0, len(texts))
+	sort.SliceStable(resp.Data, func(i, j int) bool {
+		return resp.Data[i].Index < resp.Data[j].Index
+	})
+	for _, embedding := range resp.Data {
+		output = append(output, compute.QuantizeVectorFloat32(embedding.Embedding))
 	}
 
-	return bytes, nil
+	return output, nil
 }
 
 func estimateTokensConservative(text string) int {

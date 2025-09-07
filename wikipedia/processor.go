@@ -58,15 +58,6 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	reqCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 
-	// Generate embeddings for title
-	embedStart := time.Now()
-	titleEmbedding, err := w.GenerateEmbedding(reqCtx, title)
-	embedDuration := time.Since(embedStart).Nanoseconds()
-	w.updateMetrics(embedDuration, 0, 0, "embedding")
-	if err != nil {
-		return fmt.Errorf("failed to generate title embedding for '%s': %w", title, err)
-	}
-
 	// Generate summary using AI
 	summaryStart := time.Now()
 	summary, err := w.GenerateSummary(reqCtx, title, cleanText)
@@ -76,30 +67,38 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 		return fmt.Errorf("failed to generate summary for '%s': %w", title, err)
 	}
 
-	// Generate embedding for summary
-	embedStart = time.Now()
-	summaryEmbedding, err := w.GenerateEmbedding(reqCtx, summary)
-	embedDuration = time.Since(embedStart).Nanoseconds()
+	// Chunk content for embeddings
+	chunks := chunkContent(cleanText, w.contextSizeEmbed)
+
+	// Prepare all texts for batch embedding
+	embeddingTexts := make([]string, 0, 2+len(chunks))
+	embeddingTexts = append(embeddingTexts, title)     // Index 0: title
+	embeddingTexts = append(embeddingTexts, summary)   // Index 1: summary
+	embeddingTexts = append(embeddingTexts, chunks...) // Index 2+: content chunks
+
+	// Generate all embeddings in a single batch request
+	embedStart := time.Now()
+	embeddings, err := w.GenerateEmbedding(reqCtx, embeddingTexts)
+	embedDuration := time.Since(embedStart).Nanoseconds()
 	w.updateMetrics(embedDuration, 0, 0, "embedding")
 	if err != nil {
-		return fmt.Errorf("failed to generate summary embedding for '%s': %w", title, err)
+		return fmt.Errorf("failed to generate embeddings for '%s': %w", title, err)
 	}
 
-	// Chunk content and generate embeddings
-	chunks := chunkContent(cleanText, w.contextSizeEmbed)
-	contentEmbeddings := make([]*database.Embedding, 0, len(chunks))
+	// Validate we got the expected number of embeddings
+	if len(embeddings) != len(embeddingTexts) {
+		return fmt.Errorf("embedding count mismatch for '%s': expected %d, got %d", title, len(embeddingTexts), len(embeddings))
+	}
 
-	for _, chunk := range chunks {
-		embedStart := time.Now()
-		embedding, err := w.GenerateEmbedding(reqCtx, chunk)
-		embedDuration := time.Since(embedStart).Nanoseconds()
-		w.updateMetrics(embedDuration, 0, 0, "embedding")
-		if err != nil {
-			fmt.Printf("Failed to generate content embedding for '%s': %v\n", title, err)
-			continue
-		}
+	// Extract embeddings by type
+	titleEmbedding := embeddings[0]
+	summaryEmbedding := embeddings[1]
+
+	// Build content embeddings from the remaining embeddings
+	contentEmbeddings := make([]*database.Embedding, 0, len(chunks))
+	for i := 2; i < len(embeddings); i++ {
 		contentEmbeddings = append(contentEmbeddings, &database.Embedding{
-			Vector:    embedding,
+			Vector:    embeddings[i],
 			IsContent: true,
 		})
 	}
