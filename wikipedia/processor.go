@@ -62,7 +62,7 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	summaryStart := time.Now()
 	summary, err := w.GenerateSummary(reqCtx, title, cleanText)
 	summaryDuration := time.Since(summaryStart).Nanoseconds()
-	w.updateMetrics(0, summaryDuration, 0, "summary")
+	w.updateMetrics(summaryDuration, MetricType_Summary)
 	if err != nil {
 		return fmt.Errorf("failed to generate summary for '%s': %w", title, err)
 	}
@@ -80,7 +80,7 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	embedStart := time.Now()
 	embeddings, err := w.GenerateEmbedding(reqCtx, embeddingTexts)
 	embedDuration := time.Since(embedStart).Nanoseconds()
-	w.updateMetrics(embedDuration, 0, 0, "embedding")
+	w.updateMetrics(embedDuration, MetricType_Embedding)
 	if err != nil {
 		return fmt.Errorf("failed to generate embeddings for '%s': %w", title, err)
 	}
@@ -131,7 +131,7 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 		return fmt.Errorf("failed to insert page '%s': %w", title, err)
 	}
 	insertDuration := time.Since(insertStart).Nanoseconds()
-	w.updateMetrics(0, 0, insertDuration, "insert")
+	w.updateMetrics(insertDuration, MetricType_Insert)
 
 	w.Record(title)
 	return nil
@@ -204,19 +204,19 @@ func chunkContent(content string, ctxEmbed uint) []string {
 }
 
 // updateMetrics updates processing metrics in a thread-safe manner
-func (w *Wikipedia) updateMetrics(embedTime, summaryTime, insertTime int64, metricType string) {
+func (w *Wikipedia) updateMetrics(duration int64, metricType MetricType) {
 	w.metricsLock.Lock()
 	defer w.metricsLock.Unlock()
 
 	switch metricType {
-	case "embedding":
-		atomic.AddInt64(&w.metrics.EmbeddingTimeTotal, embedTime)
+	case MetricType_Embedding:
+		atomic.AddInt64(&w.metrics.EmbeddingTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.EmbeddingCount, 1)
-	case "summary":
-		atomic.AddInt64(&w.metrics.SummaryTimeTotal, summaryTime)
+	case MetricType_Summary:
+		atomic.AddInt64(&w.metrics.SummaryTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.SummaryCount, 1)
-	case "insert":
-		atomic.AddInt64(&w.metrics.InsertTimeTotal, insertTime)
+	case MetricType_Insert:
+		atomic.AddInt64(&w.metrics.InsertTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.InsertCount, 1)
 	}
 }
@@ -235,3 +235,11 @@ func (w *Wikipedia) GetMetrics() ProcessingMetrics {
 		InsertCount:        atomic.LoadInt64(&w.metrics.InsertCount),
 	}
 }
+
+type MetricType uint8
+
+const (
+	MetricType_Embedding MetricType = iota
+	MetricType_Summary
+	MetricType_Insert
+)
