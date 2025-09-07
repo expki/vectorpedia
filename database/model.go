@@ -31,9 +31,17 @@ type Summary struct {
 }
 
 type Embedding struct {
-	ID        uint64 `gorm:"primaryKey;not null"`
-	Vector    []byte `gorm:"not null"`
-	IsTitle   bool   `gorm:"not null"`
-	IsSummary bool   `gorm:"not null"`
-	IsContent bool   `gorm:"not null"`
+	ID         uint64    `gorm:"primaryKey;not null"`
+	Vector     []byte    `gorm:"not null"`
+	IsTitle    bool      `gorm:"not null;index"`
+	IsSummary  bool      `gorm:"not null;index"`
+	IsContent  bool      `gorm:"not null;index"`
+	CentroidID *uint64   `gorm:"index"`
+	Centroid   *Centroid `gorm:"foreignKey:CentroidID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL"`
+}
+
+type Centroid struct {
+	ID         uint64       `gorm:"primaryKey;not null"`
+	Vector     []byte       `gorm:"not null"`
+	Embeddings []*Embedding `gorm:"foreignKey:CentroidID"`
 }
