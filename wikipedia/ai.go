@@ -12,8 +12,8 @@ import (
 
 // GenerateSummary generates a summary for a Wikipedia article using AI
 func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) (string, error) {
-	systemMsg := "You are a helpful assistant that creates concise summaries of Wikipedia articles. Provide a clear, informative summary in 2-3 sentences."
-	userPrefix := fmt.Sprintf("Please provide a concise summary of this Wikipedia article titled '%s':\n\n", title)
+	systemMsg := "You are a Wikipedia article summarizer. Output only the summary text itself - no introductory phrases, no prefixes, no 'Here's a summary' or similar text. Write a clear, informative summary in 2-3 sentences."
+	userPrefix := fmt.Sprintf("Article: %s\n\n", title)
 	
 	// Tokenize the system message and user prefix to calculate remaining tokens
 	tokenStart := time.Now()
