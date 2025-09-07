@@ -76,10 +76,10 @@ type Usage struct {
 }
 
 type ServerStatistics struct {
-	URL             string `json:"url"`
-	IsHealthy       bool   `json:"is_healthy"`
-	TotalRequests   int64  `json:"total_requests"`
-	ActiveRequests  int64  `json:"active_requests"`
+	URL            string `json:"url"`
+	IsHealthy      bool   `json:"is_healthy"`
+	TotalRequests  int64  `json:"total_requests"`
+	ActiveRequests int64  `json:"active_requests"`
 }
 
 type ClientStatistics struct {
@@ -240,6 +240,9 @@ func (c *client) checkServerHealth(srv *server) {
 			logger.Sugar().Warnf("server is down: %s", srv.url)
 		}
 		return
+	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
 	resp, err := c.httpClient.Do(req)
