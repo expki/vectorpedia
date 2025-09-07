@@ -51,15 +51,16 @@ type Client interface {
 }
 
 type client struct {
-	token          string
-	servers        []*server
 	httpClient     *http.Client
-	clientRequests atomic.Int64
-	encoder        *zstd.Encoder
-	decoder        *zstd.Decoder
-	mu             sync.RWMutex
-	clientMu       sync.RWMutex
-	appCtx         context.Context
+	clientRequests int64
+	clientMu       sync.Mutex
+
+	token   string
+	servers []*server
+	encoder *zstd.Encoder
+	decoder *zstd.Decoder
+	mu      sync.RWMutex
+	appCtx  context.Context
 }
 
 type server struct {
@@ -132,10 +133,16 @@ func NewClient(appCtx context.Context, urls []string, token string) (Client, err
 }
 
 func createHTTPClient() (*http.Client, error) {
-	transport := &http2.Transport{
+	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
+		IdleConnTimeout: 20 * time.Second,
+		MaxIdleConns:    5,
+	}
+	err := http2.ConfigureTransport(transport)
+	if err != nil {
+		return nil, fmt.Errorf("http2 transport: %v", err)
 	}
 
 	return &http.Client{
@@ -149,28 +156,29 @@ func (c *client) Close() {
 }
 
 func (c *client) getHTTPClient() (*http.Client, error) {
-	if c.clientRequests.Add(1) > 200 {
-		c.clientMu.Lock()
-		defer c.clientMu.Unlock()
+	c.clientMu.Lock()
+	defer c.clientMu.Unlock()
+	c.clientRequests += 1
 
-		// Close the old HTTP client's idle connections
-		if c.httpClient != nil && c.httpClient.Transport != nil {
-			if transport, ok := c.httpClient.Transport.(*http2.Transport); ok {
-				transport.CloseIdleConnections()
-			}
-		}
+	if c.clientRequests <= 200 {
+		return c.httpClient, nil
+	}
+	c.clientRequests = 0
 
-		newClient, err := createHTTPClient()
-		if err != nil {
-			return nil, err
-		}
-		c.httpClient = newClient
-		c.clientRequests.Store(1)
-		return newClient, nil
+	var err error
+	prevClient := c.httpClient
+	c.httpClient, err = createHTTPClient()
+	if err != nil {
+		return nil, err
 	}
 
-	c.clientMu.RLock()
-	defer c.clientMu.RUnlock()
+	// Close the old HTTP client's idle connections
+	if prevClient.Transport != nil {
+		if transport, ok := prevClient.Transport.(*http2.Transport); ok {
+			transport.CloseIdleConnections()
+		}
+	}
+
 	return c.httpClient, nil
 }
 
