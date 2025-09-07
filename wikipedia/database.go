@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/expki/vectorpedia/database"
+	"github.com/expki/vectorpedia/logger"
 	"gorm.io/plugin/dbresolver"
 )
 
@@ -32,16 +33,22 @@ func (w *Wikipedia) insertSinglePage(ctx context.Context, page *database.Page) e
 		return fmt.Errorf("failed to insert title: %w", err)
 	}
 
+	// Insert summary
+	err = w.db.WithContext(ctx).Clauses(dbresolver.Write).Create(page.Summary).Error
+	if err != nil {
+		return fmt.Errorf("failed to insert summary: %w", err)
+	}
+
 	// Insert content
 	err = w.db.WithContext(ctx).Clauses(dbresolver.Write).Create(page.Content).Error
 	if err != nil {
 		return fmt.Errorf("failed to insert content: %w", err)
 	}
 
-	// Insert summary
-	err = w.db.WithContext(ctx).Clauses(dbresolver.Write).Create(page.Summary).Error
+	// Associate content embeddings through the many2many relationship
+	err = w.db.WithContext(ctx).Clauses(dbresolver.Write).Model(page.Content).Association("Embeddings").Append(page.Content.Embeddings)
 	if err != nil {
-		return fmt.Errorf("failed to insert summary: %w", err)
+		logger.Sugar().Errorf("failed to associate content embeddings: %w", err)
 	}
 
 	// Insert page
