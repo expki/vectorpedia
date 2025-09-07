@@ -5,7 +5,6 @@ go 1.25.1
 require (
 	github.com/cespare/xxhash v1.1.0
 	github.com/cosnicolaou/pbzip2 v1.0.6
-	github.com/expki/calculator/lib v0.0.0-20250906235542-b8398f527a54
 	github.com/klauspost/compress v1.18.0
 	github.com/schollz/progressbar/v3 v3.18.0
 	go.uber.org/zap v1.27.0

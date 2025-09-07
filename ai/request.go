@@ -21,7 +21,10 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 		return nil, fmt.Errorf("failed marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", srv.url+endpoint, bytes.NewReader(data))
+	// Compress the data with zstd
+	compressed := c.encoder.EncodeAll(data, nil)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", srv.url+endpoint, bytes.NewReader(compressed))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -49,6 +52,9 @@ func (c *client) doRequestWithQueryType(ctx context.Context, endpoint string, re
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if resp.Header.Get("Content-Encoding") == "zstd" {
+			body, _ = c.decoder.DecodeAll(body, nil)
+		}
 		return nil, fmt.Errorf("server returned status %d: %s", resp.StatusCode, string(body))
 	}
 

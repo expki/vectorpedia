@@ -23,6 +23,8 @@ import (
 	"github.com/expki/vectorpedia/static"
 	"github.com/expki/vectorpedia/wikipedia"
 
+	_ "net/http/pprof"
+
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
@@ -47,11 +49,11 @@ func calculateAverage(totalNanos int64, count int64) float64 {
 }
 
 func main() {
-	//go func() {
-	//	log.Println("Starting pprof server on :6060")
-	//	log.Println("http://localhost:6060/debug/pprof/")
-	//	log.Println(http.ListenAndServe("localhost:6060", nil))
-	//}()
+	go func() {
+		log.Println("Starting pprof server on :6060")
+		log.Println("http://localhost:6060/debug/pprof/")
+		log.Println(http.ListenAndServe(":6060", nil))
+	}()
 
 	appCtx, stopApp := context.WithCancel(context.Background())
 	defer stopApp()
@@ -113,13 +115,14 @@ func main() {
 
 	// Import
 	if len(os.Args) > 2 {
-		logger.Sugar().Info("Loading Wikipedia...")
-		wikipediaInstance = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL))
-		err = wikipediaInstance.ImportFromFile(appCtx, os.Args[2])
-		if err != nil {
-			logger.Sugar().Fatalf("wikipedia import: %v", err)
-		}
-		return
+		go func() {
+			logger.Sugar().Info("Loading Wikipedia...")
+			wikipediaInstance = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL))
+			err = wikipediaInstance.ImportFromFile(appCtx, os.Args[2])
+			if err != nil {
+				logger.Sugar().Fatalf("wikipedia import: %v", err)
+			}
+		}()
 	}
 
 	// Create mux
@@ -205,8 +208,8 @@ func main() {
 
 		// Prepare statistics response
 		stats := struct {
-			Servers    ai.ClientStatistics        `json:"servers"`
-			Processing *ProcessingStatisticsJSON  `json:"processing,omitempty"`
+			Servers    ai.ClientStatistics       `json:"servers"`
+			Processing *ProcessingStatisticsJSON `json:"processing,omitempty"`
 		}{
 			Servers: aiClient.GetStatistics(),
 		}

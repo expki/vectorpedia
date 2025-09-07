@@ -159,45 +159,44 @@ func shouldSkipPage(title string) bool {
 }
 
 // chunkContent splits content into overlapping chunks
-func chunkContent(content string, ctxEmbed uint) []string {
+func chunkContent(content string, ctxTokensEmbed uint) []string {
 	var chunks []string
+
+	// Calculate chunk size in characters based on token limit
+	chunkSize := estimateContentLength(int(ctxTokensEmbed))
 	contentLen := len(content)
 
-	if contentLen <= int(ctxEmbed) {
+	// If content fits in one chunk, return as is
+	if contentLen <= chunkSize {
 		return []string{content}
 	}
 
+	// Calculate overlap (5% of chunk size, capped at 256 characters)
+	overlap := chunkSize / 20
+	if overlap > 256 {
+		overlap = 256
+	}
+
+	// Split content into chunks with simple cutting
 	for start := 0; start < contentLen; {
-		end := start + int(ctxEmbed)
+		end := start + chunkSize
 		if end > contentLen {
 			end = contentLen
 		}
 
-		// Try to break at a sentence or paragraph boundary
-		if end < contentLen {
-			// Look for sentence endings
-			lastPeriod := strings.LastIndex(content[start:end], ". ")
-			lastNewline := strings.LastIndex(content[start:end], "\n")
-
-			breakPoint := -1
-			if lastNewline > 0 && lastNewline > end-200 {
-				breakPoint = lastNewline
-			} else if lastPeriod > 0 && lastPeriod > end-200 {
-				breakPoint = lastPeriod + 1
-			}
-
-			if breakPoint > 0 {
-				end = start + breakPoint
-			}
+		// Extract chunk and trim whitespace
+		chunk := strings.TrimSpace(content[start:end])
+		if chunk != "" {
+			chunks = append(chunks, chunk)
 		}
 
-		chunks = append(chunks, strings.TrimSpace(content[start:end]))
-
-		// Move start with overlap
-		start = end - int(ctxEmbed/20)
-		if start < 0 {
-			start = 0
+		// If we've reached the end, break
+		if end >= contentLen {
+			break
 		}
+
+		// Move to next chunk with overlap
+		start = end - overlap
 	}
 
 	return chunks

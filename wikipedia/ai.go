@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sort"
+	"sync"
 
 	"github.com/expki/vectorpedia/ai"
 	"github.com/expki/vectorpedia/compute"
@@ -48,29 +48,38 @@ func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) 
 
 // GenerateEmbedding generates an embedding for the given text
 func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]byte, error) {
-	input := make([]string, 0, len(texts))
-	for _, text := range texts {
-		input = append(input, truncate(text, int(w.contextSizeEmbed)))
-	}
-	req := &ai.EmbedRequest{
-		Input: input,
-	}
+	output := make([][]byte, len(texts))
+	errors := make([]error, len(texts))
 
-	resp, err := w.client.Embed(ctx, req)
-	if err != nil {
-		return nil, err
-	}
+	var wg sync.WaitGroup
+	wg.Add(len(texts))
 
-	if len(resp.Data) != 0 {
-		return nil, fmt.Errorf("no embedding returned: %d != %d", len(resp.Data), len(texts))
-	}
+	for idx, text := range texts {
+		go func(idx int, safeText string) {
+			defer wg.Done()
 
-	output := make([][]byte, 0, len(texts))
-	sort.SliceStable(resp.Data, func(i, j int) bool {
-		return resp.Data[i].Index < resp.Data[j].Index
-	})
-	for _, embedding := range resp.Data {
-		output = append(output, compute.QuantizeVectorFloat32(embedding.Embedding))
+			req := &ai.EmbedRequest{
+				Input: []string{safeText},
+			}
+			resp, err := w.client.Embed(ctx, req)
+			if err != nil {
+				errors[idx] = err
+				return
+			}
+			if len(resp.Data) == 0 {
+				errors[idx] = fmt.Errorf("no embedding returned")
+				return
+			}
+			output[idx] = compute.QuantizeVectorFloat32(resp.Data[0].Embedding)
+		}(idx, truncate(text, int(w.contextSizeEmbed)))
+	}
+	wg.Wait()
+
+	// Check for any errors
+	for idx, err := range errors {
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed text %d: %w", idx, err)
+		}
 	}
 
 	return output, nil
@@ -90,6 +99,11 @@ func estimateTokensConservative(text string) int {
 	}
 
 	return estimatedTokens
+}
+
+func estimateContentLength(tokens int) int {
+	// assume 2.5 chars per token
+	return int(math.Floor(float64(tokens) * 2.5))
 }
 
 func truncate(text string, maxTokens int) string {

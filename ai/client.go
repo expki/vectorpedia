@@ -153,6 +153,13 @@ func (c *client) getHTTPClient() (*http.Client, error) {
 		c.clientMu.Lock()
 		defer c.clientMu.Unlock()
 
+		// Close the old HTTP client's idle connections
+		if c.httpClient != nil && c.httpClient.Transport != nil {
+			if transport, ok := c.httpClient.Transport.(*http2.Transport); ok {
+				transport.CloseIdleConnections()
+			}
+		}
+
 		newClient, err := createHTTPClient()
 		if err != nil {
 			return nil, err
