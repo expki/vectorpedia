@@ -3,8 +3,6 @@ package config
 import (
 	"encoding/json"
 	"errors"
-
-	"github.com/expki/go-vectorsearch/config"
 )
 
 // ParseConfig parses the raw JSON configuration.
@@ -17,9 +15,15 @@ func ParseConfig(raw []byte) (config Config, err error) {
 }
 
 type Config struct {
-	Server   config.ConfigServer `json:"server"`
-	TLS      config.ConfigTLS    `json:"tls"`
-	Database config.Database     `json:"database"`
-	AI       config.AI           `json:"ai"`
-	LogLevel config.LogLevel     `json:"log_level"`
+	Server   ConfigServer          `json:"server"`
+	TLS      ConfigTLS             `json:"tls"`
+	Database Database              `json:"database"`
+	URL      SingleOrSlice[string] `json:"url"`
+	Token    string                `json:"token"`
+	LogLevel LogLevel              `json:"log_level"`
+}
+
+type ConfigServer struct {
+	HttpAddress  string `json:"http_address"`
+	HttpsAddress string `json:"https_address"`
 }

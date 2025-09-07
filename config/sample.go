@@ -4,47 +4,29 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-
-	"github.com/expki/go-vectorsearch/config"
 )
 
 // CreateSample creates a sample configuration file.
 func CreateSample(path string) error {
 	sample := Config{
-		Server: config.ConfigServer{
+		Server: ConfigServer{
 			HttpAddress:  ":7600",
 			HttpsAddress: ":7601",
 		},
-		TLS: config.ConfigTLS{
+		TLS: ConfigTLS{
 			DomainNameServer: []string{},
 			IP:               []string{},
-			Certificates:     []*config.ConfigTLSPath{},
+			Certificates:     []*ConfigTLSPath{},
 		},
-		AI: config.AI{
-			Embed: config.Ollama{
-				Url:    []string{"http://localhost:11434"},
-				Model:  "nomic-embed-text",
-				NumCtx: 8192,
-			},
-			Generate: config.Ollama{
-				Url:    []string{"http://localhost:11434"},
-				Model:  "llama3.2",
-				NumCtx: 128_000,
-			},
-			Chat: config.Ollama{
-				Url:    []string{"http://localhost:11434"},
-				Model:  "llama3.2",
-				NumCtx: 128_000,
-			},
-		},
-		Database: config.Database{
+		URL:   []string{"https://localhost:5000"},
+		Token: "your-token",
+		Database: Database{
 			Sqlite:   "./vectorstore.db",
-			Cache:    "./cache",
-			LogLevel: config.LogLevelError,
+			LogLevel: LogLevelError,
 		},
-		LogLevel: config.LogLevelInfo,
+		LogLevel: LogLevelInfo,
 	}
-	raw, err := json.MarshalIndent(sample, "", "    ")
+	raw, err := json.MarshalIndent(sample, "", "  ")
 	if err != nil {
 		return errors.Join(errors.New("could not marshal sample config"), err)
 	}
