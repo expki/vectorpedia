@@ -32,12 +32,23 @@ import (
 
 // ProcessingStatisticsJSON represents processing metrics in JSON format
 type ProcessingStatisticsJSON struct {
-	AverageEmbeddingTimeMs float64 `json:"average_embedding_time_ms"`
-	AverageSummaryTimeMs   float64 `json:"average_summary_time_ms"`
-	AverageInsertTimeMs    float64 `json:"average_insert_time_ms"`
-	TotalEmbeddings        int64   `json:"total_embeddings"`
-	TotalSummaries         int64   `json:"total_summaries"`
-	TotalInserts           int64   `json:"total_inserts"`
+	AverageEmbeddingTimeMs       float64 `json:"average_embedding_time_ms"`
+	AverageSummaryTimeMs         float64 `json:"average_summary_time_ms"`
+	AverageInsertTimeMs          float64 `json:"average_insert_time_ms"`
+	AverageProcessPageTimeMs     float64 `json:"average_process_page_time_ms"`
+	AverageTokenizeChatTimeMs    float64 `json:"average_tokenize_chat_time_ms"`
+	AverageTokenizeEmbedTimeMs   float64 `json:"average_tokenize_embed_time_ms"`
+	AverageDetokenizeChatTimeMs  float64 `json:"average_detokenize_chat_time_ms"`
+	AverageDetokenizeEmbedTimeMs float64 `json:"average_detokenize_embed_time_ms"`
+	TotalEmbeddings              int64   `json:"total_embeddings"`
+	TotalSummaries               int64   `json:"total_summaries"`
+	TotalInserts                 int64   `json:"total_inserts"`
+	TotalPagesProcessed          int64   `json:"total_pages_processed"`
+	TotalTokenizeChat            int64   `json:"total_tokenize_chat"`
+	TotalTokenizeEmbed           int64   `json:"total_tokenize_embed"`
+	TotalDetokenizeChat          int64   `json:"total_detokenize_chat"`
+	TotalDetokenizeEmbed         int64   `json:"total_detokenize_embed"`
+	PagesPerMinute               float64 `json:"pages_per_minute"`
 }
 
 // calculateAverage calculates average time in milliseconds
@@ -219,12 +230,23 @@ func main() {
 		if wikipediaInstance != nil {
 			metrics := wikipediaInstance.GetMetrics()
 			stats.Processing = &ProcessingStatisticsJSON{
-				AverageEmbeddingTimeMs: calculateAverage(metrics.EmbeddingTimeTotal, metrics.EmbeddingCount),
-				AverageSummaryTimeMs:   calculateAverage(metrics.SummaryTimeTotal, metrics.SummaryCount),
-				AverageInsertTimeMs:    calculateAverage(metrics.InsertTimeTotal, metrics.InsertCount),
-				TotalEmbeddings:        metrics.EmbeddingCount,
-				TotalSummaries:         metrics.SummaryCount,
-				TotalInserts:           metrics.InsertCount,
+				AverageEmbeddingTimeMs:       calculateAverage(metrics.EmbeddingTimeTotal, metrics.EmbeddingCount),
+				AverageSummaryTimeMs:         calculateAverage(metrics.SummaryTimeTotal, metrics.SummaryCount),
+				AverageInsertTimeMs:          calculateAverage(metrics.InsertTimeTotal, metrics.InsertCount),
+				AverageProcessPageTimeMs:     calculateAverage(metrics.ProcessPageTimeTotal, metrics.ProcessPageCount),
+				AverageTokenizeChatTimeMs:    calculateAverage(metrics.TokenizeChatTimeTotal, metrics.TokenizeChatCount),
+				AverageTokenizeEmbedTimeMs:   calculateAverage(metrics.TokenizeEmbedTimeTotal, metrics.TokenizeEmbedCount),
+				AverageDetokenizeChatTimeMs:  calculateAverage(metrics.DetokenizeChatTimeTotal, metrics.DetokenizeChatCount),
+				AverageDetokenizeEmbedTimeMs: calculateAverage(metrics.DetokenizeEmbedTimeTotal, metrics.DetokenizeEmbedCount),
+				TotalEmbeddings:              metrics.EmbeddingCount,
+				TotalSummaries:               metrics.SummaryCount,
+				TotalInserts:                 metrics.InsertCount,
+				TotalPagesProcessed:          metrics.ProcessPageCount,
+				TotalTokenizeChat:            metrics.TokenizeChatCount,
+				TotalTokenizeEmbed:           metrics.TokenizeEmbedCount,
+				TotalDetokenizeChat:          metrics.DetokenizeChatCount,
+				TotalDetokenizeEmbed:         metrics.DetokenizeEmbedCount,
+				PagesPerMinute:               metrics.PagesPerMinute,
 			}
 		}
 		wikipediaLock.RUnlock()

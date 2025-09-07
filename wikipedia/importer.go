@@ -29,7 +29,7 @@ func New(db *database.Database, client ai.Client, ctxChat, ctxEmbed, ctxRerank u
 		contextSizeChat:   ctxChat,
 		contextSizeEmbed:  ctxEmbed,
 		contextSizeRerank: ctxRerank,
-		concurrent:        make(chan struct{}, providers),
+		concurrent:        make(chan struct{}, providers*10),
 	}
 }
 
@@ -43,6 +43,11 @@ func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
 	}
 
 	fmt.Println("Importing Wikipedia data from:", filePath)
+
+	// Record import start time
+	w.metricsLock.Lock()
+	w.metrics.ImportStartTime = time.Now()
+	w.metricsLock.Unlock()
 
 	// Interrupt signal
 	interrupt := make(chan os.Signal, 1)
@@ -80,7 +85,7 @@ func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
 	)
 	barReader := progressbar.NewReader(file, bar)
 
-	// Create a bzip2 reader from the file
+	// Create a bzip2 reader from the progress bar reader
 	bz2Reader := pbzip2.NewReader(ctx, &barReader)
 
 	// Create an XML decoder reading from the decompressed stream

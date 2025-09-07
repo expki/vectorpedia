@@ -3,6 +3,7 @@ package wikipedia
 import (
 	_ "encoding/xml"
 	"sync"
+	"time"
 
 	"github.com/expki/vectorpedia/ai"
 	"github.com/expki/vectorpedia/database"
@@ -10,12 +11,24 @@ import (
 
 // ProcessingMetrics holds timing statistics for page processing
 type ProcessingMetrics struct {
-	EmbeddingTimeTotal   int64 // Total time in nanoseconds
-	EmbeddingCount       int64
-	SummaryTimeTotal     int64 // Total time in nanoseconds
-	SummaryCount         int64
-	InsertTimeTotal      int64 // Total time in nanoseconds
-	InsertCount          int64
+	EmbeddingTimeTotal      int64 // Total time in nanoseconds
+	EmbeddingCount          int64
+	SummaryTimeTotal        int64 // Total time in nanoseconds
+	SummaryCount            int64
+	InsertTimeTotal         int64 // Total time in nanoseconds
+	InsertCount             int64
+	ProcessPageTimeTotal    int64 // Total time for ProcessPage in nanoseconds
+	ProcessPageCount        int64
+	TokenizeChatTimeTotal   int64 // Total time for chat tokenization in nanoseconds
+	TokenizeChatCount       int64
+	TokenizeEmbedTimeTotal  int64 // Total time for embed tokenization in nanoseconds
+	TokenizeEmbedCount      int64
+	DetokenizeChatTimeTotal int64 // Total time for chat detokenization in nanoseconds
+	DetokenizeChatCount     int64
+	DetokenizeEmbedTimeTotal int64 // Total time for embed detokenization in nanoseconds
+	DetokenizeEmbedCount    int64
+	ImportStartTime         time.Time // Start time of import
+	PagesPerMinute          float64   // Average pages processed per minute
 }
 
 // Wikipedia manages the import process

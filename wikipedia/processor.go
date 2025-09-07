@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
+	"github.com/expki/vectorpedia/ai"
 	"github.com/expki/vectorpedia/database"
 )
 
@@ -42,6 +43,9 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 		return nil
 	}
 
+	// Start timing from after shouldSkipPage
+	pageStart := time.Now()
+
 	text := page.Revision.Text
 
 	// Remove pages that simply list other pages
@@ -68,7 +72,10 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	}
 
 	// Chunk content for embeddings
-	chunks := chunkContent(cleanText, w.contextSizeEmbed)
+	chunks, err := w.chunkContent(reqCtx, cleanText)
+	if err != nil {
+		return fmt.Errorf("failed to chunk content for '%s': %w", title, err)
+	}
 
 	// Prepare all texts for batch embedding
 	embeddingTexts := make([]string, 0, 2+len(chunks))
@@ -134,6 +141,11 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	w.updateMetrics(insertDuration, MetricType_Insert)
 
 	w.Record(title)
+
+	// Record total ProcessPage time
+	pageDuration := time.Since(pageStart).Nanoseconds()
+	w.updateMetrics(pageDuration, MetricType_ProcessPage)
+
 	return nil
 }
 
@@ -158,40 +170,57 @@ func shouldSkipPage(title string) bool {
 	return false
 }
 
-// chunkContent splits content into overlapping chunks
-func chunkContent(content string, ctxTokensEmbed uint) []string {
-	var chunks []string
+// chunkContent splits content into overlapping chunks based on token count
+func (w *Wikipedia) chunkContent(ctx context.Context, content string) ([]string, error) {
+	// Tokenize the entire content
+	tokenStart := time.Now()
+	tokenResp, err := w.client.TokenizeEmbed(ctx, &ai.TokenizeRequest{Content: content})
+	tokenDuration := time.Since(tokenStart).Nanoseconds()
+	w.updateMetrics(tokenDuration, MetricType_TokenizeEmbed)
+	if err != nil {
+		return nil, fmt.Errorf("failed to tokenize content: %w", err)
+	}
 
-	// Calculate chunk size in characters based on token limit
-	chunkSize := estimateContentLength(int(ctxTokensEmbed))
-	contentLen := len(content)
+	tokens := tokenResp.Tokens
+	// Leave some buffer space (use 95% of context size to be safe)
+	tokenLimit := int(w.contextSizeEmbed * 95 / 100)
 
 	// If content fits in one chunk, return as is
-	if contentLen <= chunkSize {
-		return []string{content}
+	if len(tokens) <= tokenLimit {
+		return []string{content}, nil
 	}
 
-	// Calculate overlap (5% of chunk size, capped at 256 characters)
-	overlap := chunkSize / 20
-	if overlap > 256 {
-		overlap = 256
+	var chunks []string
+	// Calculate overlap (5% of token limit, capped at 50 tokens)
+	overlap := tokenLimit / 20
+	if overlap > 50 {
+		overlap = 50
 	}
 
-	// Split content into chunks with simple cutting
-	for start := 0; start < contentLen; {
-		end := start + chunkSize
-		if end > contentLen {
-			end = contentLen
+	// Split tokens into chunks with overlap
+	for start := 0; start < len(tokens); {
+		end := start + tokenLimit
+		if end > len(tokens) {
+			end = len(tokens)
 		}
 
-		// Extract chunk and trim whitespace
-		chunk := strings.TrimSpace(content[start:end])
+		// Extract chunk tokens and detokenize
+		chunkTokens := tokens[start:end]
+		detokenStart := time.Now()
+		detokenized, err := w.client.DetokenizeEmbed(ctx, &ai.DetokenizeRequest{Tokens: chunkTokens})
+		detokenDuration := time.Since(detokenStart).Nanoseconds()
+		w.updateMetrics(detokenDuration, MetricType_DetokenizeEmbed)
+		if err != nil {
+			return nil, fmt.Errorf("failed to detokenize chunk: %w", err)
+		}
+
+		chunk := strings.TrimSpace(detokenized.Content)
 		if chunk != "" {
 			chunks = append(chunks, chunk)
 		}
 
 		// If we've reached the end, break
-		if end >= contentLen {
+		if end >= len(tokens) {
 			break
 		}
 
@@ -199,7 +228,7 @@ func chunkContent(content string, ctxTokensEmbed uint) []string {
 		start = end - overlap
 	}
 
-	return chunks
+	return chunks, nil
 }
 
 // updateMetrics updates processing metrics in a thread-safe manner
@@ -217,6 +246,28 @@ func (w *Wikipedia) updateMetrics(duration int64, metricType MetricType) {
 	case MetricType_Insert:
 		atomic.AddInt64(&w.metrics.InsertTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.InsertCount, 1)
+	case MetricType_ProcessPage:
+		atomic.AddInt64(&w.metrics.ProcessPageTimeTotal, duration)
+		atomic.AddInt64(&w.metrics.ProcessPageCount, 1)
+		// Calculate pages per minute
+		if !w.metrics.ImportStartTime.IsZero() {
+			elapsedMinutes := time.Since(w.metrics.ImportStartTime).Minutes()
+			if elapsedMinutes > 0 {
+				w.metrics.PagesPerMinute = float64(w.metrics.ProcessPageCount) / elapsedMinutes
+			}
+		}
+	case MetricType_TokenizeChat:
+		atomic.AddInt64(&w.metrics.TokenizeChatTimeTotal, duration)
+		atomic.AddInt64(&w.metrics.TokenizeChatCount, 1)
+	case MetricType_TokenizeEmbed:
+		atomic.AddInt64(&w.metrics.TokenizeEmbedTimeTotal, duration)
+		atomic.AddInt64(&w.metrics.TokenizeEmbedCount, 1)
+	case MetricType_DetokenizeChat:
+		atomic.AddInt64(&w.metrics.DetokenizeChatTimeTotal, duration)
+		atomic.AddInt64(&w.metrics.DetokenizeChatCount, 1)
+	case MetricType_DetokenizeEmbed:
+		atomic.AddInt64(&w.metrics.DetokenizeEmbedTimeTotal, duration)
+		atomic.AddInt64(&w.metrics.DetokenizeEmbedCount, 1)
 	}
 }
 
@@ -226,12 +277,24 @@ func (w *Wikipedia) GetMetrics() ProcessingMetrics {
 	defer w.metricsLock.RUnlock()
 
 	return ProcessingMetrics{
-		EmbeddingTimeTotal: atomic.LoadInt64(&w.metrics.EmbeddingTimeTotal),
-		EmbeddingCount:     atomic.LoadInt64(&w.metrics.EmbeddingCount),
-		SummaryTimeTotal:   atomic.LoadInt64(&w.metrics.SummaryTimeTotal),
-		SummaryCount:       atomic.LoadInt64(&w.metrics.SummaryCount),
-		InsertTimeTotal:    atomic.LoadInt64(&w.metrics.InsertTimeTotal),
-		InsertCount:        atomic.LoadInt64(&w.metrics.InsertCount),
+		EmbeddingTimeTotal:       atomic.LoadInt64(&w.metrics.EmbeddingTimeTotal),
+		EmbeddingCount:          atomic.LoadInt64(&w.metrics.EmbeddingCount),
+		SummaryTimeTotal:        atomic.LoadInt64(&w.metrics.SummaryTimeTotal),
+		SummaryCount:            atomic.LoadInt64(&w.metrics.SummaryCount),
+		InsertTimeTotal:         atomic.LoadInt64(&w.metrics.InsertTimeTotal),
+		InsertCount:             atomic.LoadInt64(&w.metrics.InsertCount),
+		ProcessPageTimeTotal:    atomic.LoadInt64(&w.metrics.ProcessPageTimeTotal),
+		ProcessPageCount:        atomic.LoadInt64(&w.metrics.ProcessPageCount),
+		TokenizeChatTimeTotal:   atomic.LoadInt64(&w.metrics.TokenizeChatTimeTotal),
+		TokenizeChatCount:       atomic.LoadInt64(&w.metrics.TokenizeChatCount),
+		TokenizeEmbedTimeTotal:  atomic.LoadInt64(&w.metrics.TokenizeEmbedTimeTotal),
+		TokenizeEmbedCount:      atomic.LoadInt64(&w.metrics.TokenizeEmbedCount),
+		DetokenizeChatTimeTotal: atomic.LoadInt64(&w.metrics.DetokenizeChatTimeTotal),
+		DetokenizeChatCount:     atomic.LoadInt64(&w.metrics.DetokenizeChatCount),
+		DetokenizeEmbedTimeTotal: atomic.LoadInt64(&w.metrics.DetokenizeEmbedTimeTotal),
+		DetokenizeEmbedCount:    atomic.LoadInt64(&w.metrics.DetokenizeEmbedCount),
+		ImportStartTime:         w.metrics.ImportStartTime,
+		PagesPerMinute:          w.metrics.PagesPerMinute,
 	}
 }
 
@@ -241,4 +304,9 @@ const (
 	MetricType_Embedding MetricType = iota
 	MetricType_Summary
 	MetricType_Insert
+	MetricType_ProcessPage
+	MetricType_TokenizeChat
+	MetricType_TokenizeEmbed
+	MetricType_DetokenizeChat
+	MetricType_DetokenizeEmbed
 )
