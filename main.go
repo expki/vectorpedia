@@ -5,7 +5,6 @@ import (
 
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"io"
 	"log"
 	"net/http"
@@ -19,6 +18,7 @@ import (
 	"github.com/expki/vectorpedia/config"
 	"github.com/expki/vectorpedia/database"
 	"github.com/expki/vectorpedia/logger"
+	"github.com/expki/vectorpedia/server"
 	"github.com/expki/vectorpedia/static"
 	"github.com/expki/vectorpedia/wikipedia"
 
@@ -90,6 +90,9 @@ func main() {
 
 	// Create Wikipedia instance
 	wikipediaInstance := wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, gpuCount)
+
+	// Server
+	srv := server.NewServer(db, aiClient, wikipediaInstance)
 
 	// Import
 	if len(os.Args) > 2 {
@@ -177,31 +180,7 @@ func main() {
 
 	// Routes: API
 	// Statistics endpoint
-	mux.HandleFunc("/api/statistics", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		// Prepare statistics response - GPU info is now included in ServerStatistics
-		stats := struct {
-			Servers    ai.ClientStatistics          `json:"servers"`
-			Processing wikipedia.ProcessingAverages `json:"processing,omitempty"`
-		}{
-			Servers:    aiClient.GetStatistics(ctx),
-			Processing: wikipediaInstance.GetAverages(),
-		}
-
-		// Set headers and encode response
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(stats); err != nil {
-			logger.Sugar().Errorf("Failed to encode statistics: %v", err)
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-		}
-	})
+	mux.Handle("/api/statistics", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.StatisticsHandler)))))
 
 	// Routes: Files
 	mux.Handle("/", middlewareHeaders(middlewareDecompression(middlewareCompression(http.FileServerFS(static.Files)))))
