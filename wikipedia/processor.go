@@ -173,9 +173,12 @@ func shouldSkipPage(title string) bool {
 
 // chunkContent splits content into overlapping chunks based on token count
 func (w *Wikipedia) chunkContent(ctx context.Context, content string) ([]string, error) {
+	// Select backend server with load balancing
+	backend := w.client.SelectServer()
+
 	// Tokenize the entire content
 	tokenStart := time.Now()
-	tokenResp, err := w.client.TokenizeEmbed(ctx, &ai.TokenizeRequest{Content: content})
+	tokenResp, err := backend.TokenizeEmbed(ctx, &ai.TokenizeRequest{Content: content})
 	tokenDuration := time.Since(tokenStart).Nanoseconds()
 	w.updateMetrics(tokenDuration, MetricType_TokenizeEmbed)
 	if err != nil {
@@ -208,7 +211,7 @@ func (w *Wikipedia) chunkContent(ctx context.Context, content string) ([]string,
 		// Extract chunk tokens and detokenize
 		chunkTokens := tokens[start:end]
 		detokenStart := time.Now()
-		detokenized, err := w.client.DetokenizeEmbed(ctx, &ai.DetokenizeRequest{Tokens: chunkTokens})
+		detokenized, err := backend.DetokenizeEmbed(ctx, &ai.DetokenizeRequest{Tokens: chunkTokens})
 		detokenDuration := time.Since(detokenStart).Nanoseconds()
 		w.updateMetrics(detokenDuration, MetricType_DetokenizeEmbed)
 		if err != nil {
@@ -237,19 +240,39 @@ func (w *Wikipedia) updateMetrics(duration int64, metricType MetricType) {
 	w.metricsLock.Lock()
 	defer w.metricsLock.Unlock()
 
+	// Convert duration from nanoseconds to milliseconds
+	durationMs := float64(duration) / 1e6
+	const maxSamples = 100
+
 	switch metricType {
 	case MetricType_Embedding:
 		atomic.AddInt64(&w.metrics.EmbeddingTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.EmbeddingCount, 1)
+		w.embeddingDurations = append(w.embeddingDurations, durationMs)
+		if len(w.embeddingDurations) > maxSamples {
+			w.embeddingDurations = w.embeddingDurations[1:]
+		}
 	case MetricType_Summary:
 		atomic.AddInt64(&w.metrics.SummaryTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.SummaryCount, 1)
+		w.summaryDurations = append(w.summaryDurations, durationMs)
+		if len(w.summaryDurations) > maxSamples {
+			w.summaryDurations = w.summaryDurations[1:]
+		}
 	case MetricType_Insert:
 		atomic.AddInt64(&w.metrics.InsertTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.InsertCount, 1)
+		w.insertDurations = append(w.insertDurations, durationMs)
+		if len(w.insertDurations) > maxSamples {
+			w.insertDurations = w.insertDurations[1:]
+		}
 	case MetricType_ProcessPage:
 		atomic.AddInt64(&w.metrics.ProcessPageTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.ProcessPageCount, 1)
+		w.processPageDurations = append(w.processPageDurations, durationMs)
+		if len(w.processPageDurations) > maxSamples {
+			w.processPageDurations = w.processPageDurations[1:]
+		}
 		// Calculate pages per minute
 		if !w.metrics.ImportStartTime.IsZero() {
 			elapsedMinutes := time.Since(w.metrics.ImportStartTime).Minutes()
@@ -260,15 +283,31 @@ func (w *Wikipedia) updateMetrics(duration int64, metricType MetricType) {
 	case MetricType_TokenizeChat:
 		atomic.AddInt64(&w.metrics.TokenizeChatTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.TokenizeChatCount, 1)
+		w.tokenizeChatDurations = append(w.tokenizeChatDurations, durationMs)
+		if len(w.tokenizeChatDurations) > maxSamples {
+			w.tokenizeChatDurations = w.tokenizeChatDurations[1:]
+		}
 	case MetricType_TokenizeEmbed:
 		atomic.AddInt64(&w.metrics.TokenizeEmbedTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.TokenizeEmbedCount, 1)
+		w.tokenizeEmbedDurations = append(w.tokenizeEmbedDurations, durationMs)
+		if len(w.tokenizeEmbedDurations) > maxSamples {
+			w.tokenizeEmbedDurations = w.tokenizeEmbedDurations[1:]
+		}
 	case MetricType_DetokenizeChat:
 		atomic.AddInt64(&w.metrics.DetokenizeChatTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.DetokenizeChatCount, 1)
+		w.detokenizeChatDurations = append(w.detokenizeChatDurations, durationMs)
+		if len(w.detokenizeChatDurations) > maxSamples {
+			w.detokenizeChatDurations = w.detokenizeChatDurations[1:]
+		}
 	case MetricType_DetokenizeEmbed:
 		atomic.AddInt64(&w.metrics.DetokenizeEmbedTimeTotal, duration)
 		atomic.AddInt64(&w.metrics.DetokenizeEmbedCount, 1)
+		w.detokenizeEmbedDurations = append(w.detokenizeEmbedDurations, durationMs)
+		if len(w.detokenizeEmbedDurations) > maxSamples {
+			w.detokenizeEmbedDurations = w.detokenizeEmbedDurations[1:]
+		}
 	}
 }
 
@@ -296,6 +335,43 @@ func (w *Wikipedia) GetMetrics() ProcessingMetrics {
 		DetokenizeEmbedCount:     atomic.LoadInt64(&w.metrics.DetokenizeEmbedCount),
 		ImportStartTime:          w.metrics.ImportStartTime,
 		PagesPerMinute:           w.metrics.PagesPerMinute,
+	}
+}
+
+// GetAverages returns the average processing times
+func (w *Wikipedia) GetAverages() ProcessingAverages {
+	w.metricsLock.RLock()
+	defer w.metricsLock.RUnlock()
+
+	calculateAverage := func(durations []float64) float64 {
+		if len(durations) == 0 {
+			return 0
+		}
+		sum := 0.0
+		for _, d := range durations {
+			sum += d
+		}
+		return sum / float64(len(durations))
+	}
+
+	return ProcessingAverages{
+		AverageEmbeddingTimeMs:       calculateAverage(w.embeddingDurations),
+		AverageSummaryTimeMs:         calculateAverage(w.summaryDurations),
+		AverageInsertTimeMs:          calculateAverage(w.insertDurations),
+		AverageProcessPageTimeMs:     calculateAverage(w.processPageDurations),
+		AverageTokenizeChatTimeMs:    calculateAverage(w.tokenizeChatDurations),
+		AverageTokenizeEmbedTimeMs:   calculateAverage(w.tokenizeEmbedDurations),
+		AverageDetokenizeChatTimeMs:  calculateAverage(w.detokenizeChatDurations),
+		AverageDetokenizeEmbedTimeMs: calculateAverage(w.detokenizeEmbedDurations),
+		TotalEmbeddings:              atomic.LoadInt64(&w.metrics.EmbeddingCount),
+		TotalSummaries:               atomic.LoadInt64(&w.metrics.SummaryCount),
+		TotalInserts:                 atomic.LoadInt64(&w.metrics.InsertCount),
+		TotalPagesProcessed:          atomic.LoadInt64(&w.metrics.ProcessPageCount),
+		TotalTokenizeChat:            atomic.LoadInt64(&w.metrics.TokenizeChatCount),
+		TotalTokenizeEmbed:           atomic.LoadInt64(&w.metrics.TokenizeEmbedCount),
+		TotalDetokenizeChat:          atomic.LoadInt64(&w.metrics.DetokenizeChatCount),
+		TotalDetokenizeEmbed:         atomic.LoadInt64(&w.metrics.DetokenizeEmbedCount),
+		PagesPerMinute:               w.metrics.PagesPerMinute,
 	}
 }
 

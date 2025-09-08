@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -23,48 +22,12 @@ import (
 	"github.com/expki/vectorpedia/static"
 	"github.com/expki/vectorpedia/wikipedia"
 
-	_ "net/http/pprof"
-
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
 	"golang.org/x/net/http2"
 )
 
-// ProcessingStatisticsJSON represents processing metrics in JSON format
-type ProcessingStatisticsJSON struct {
-	AverageEmbeddingTimeMs       float64 `json:"average_embedding_time_ms"`
-	AverageSummaryTimeMs         float64 `json:"average_summary_time_ms"`
-	AverageInsertTimeMs          float64 `json:"average_insert_time_ms"`
-	AverageProcessPageTimeMs     float64 `json:"average_process_page_time_ms"`
-	AverageTokenizeChatTimeMs    float64 `json:"average_tokenize_chat_time_ms"`
-	AverageTokenizeEmbedTimeMs   float64 `json:"average_tokenize_embed_time_ms"`
-	AverageDetokenizeChatTimeMs  float64 `json:"average_detokenize_chat_time_ms"`
-	AverageDetokenizeEmbedTimeMs float64 `json:"average_detokenize_embed_time_ms"`
-	TotalEmbeddings              int64   `json:"total_embeddings"`
-	TotalSummaries               int64   `json:"total_summaries"`
-	TotalInserts                 int64   `json:"total_inserts"`
-	TotalPagesProcessed          int64   `json:"total_pages_processed"`
-	TotalTokenizeChat            int64   `json:"total_tokenize_chat"`
-	TotalTokenizeEmbed           int64   `json:"total_tokenize_embed"`
-	TotalDetokenizeChat          int64   `json:"total_detokenize_chat"`
-	TotalDetokenizeEmbed         int64   `json:"total_detokenize_embed"`
-	PagesPerMinute               float64 `json:"pages_per_minute"`
-}
-
-// calculateAverage calculates average time in milliseconds
-func calculateAverage(totalNanos int64, count int64) float64 {
-	if count == 0 {
-		return 0
-	}
-	return float64(totalNanos) / float64(count) / 1_000_000.0 // Convert nanoseconds to milliseconds
-}
-
 func main() {
-	go func() {
-		log.Println("Starting pprof server on :6060")
-		log.Println("http://localhost:6060/debug/pprof/")
-		log.Println(http.ListenAndServe(":6060", nil))
-	}()
 
 	appCtx, stopApp := context.WithCancel(context.Background())
 	defer stopApp()
@@ -120,15 +83,18 @@ func main() {
 		logger.Sugar().Fatalf("database.New: %v", err)
 	}
 
-	// Create Wikipedia instance (store it for metrics)
-	var wikipediaInstance *wikipedia.Wikipedia
-	var wikipediaLock sync.RWMutex
+	var gpuCount int
+	for _, backend := range aiClient.AllServers() {
+		gpuCount += backend.GpuCount()
+	}
+
+	// Create Wikipedia instance
+	wikipediaInstance := wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, gpuCount)
 
 	// Import
 	if len(os.Args) > 2 {
 		go func() {
 			logger.Sugar().Info("Loading Wikipedia...")
-			wikipediaInstance = wikipedia.New(db, aiClient, cfg.CtxSizeChat, cfg.CtxSizeEmbed, cfg.CtxSizeRerank, len(cfg.URL))
 			err = wikipediaInstance.ImportFromFile(appCtx, os.Args[2])
 			if err != nil {
 				logger.Sugar().Fatalf("wikipedia import: %v", err)
@@ -140,7 +106,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// HTTP
-	server := http.Server{
+	httpServer := http.Server{
 		Handler: mux,
 		Addr:    cfg.Server.HttpAddress,
 	}
@@ -217,39 +183,17 @@ func main() {
 			return
 		}
 
-		// Prepare statistics response
-		stats := struct {
-			Servers    ai.ClientStatistics       `json:"servers"`
-			Processing *ProcessingStatisticsJSON `json:"processing,omitempty"`
-		}{
-			Servers: aiClient.GetStatistics(),
-		}
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
 
-		// Add Wikipedia processing metrics if available
-		wikipediaLock.RLock()
-		if wikipediaInstance != nil {
-			metrics := wikipediaInstance.GetMetrics()
-			stats.Processing = &ProcessingStatisticsJSON{
-				AverageEmbeddingTimeMs:       calculateAverage(metrics.EmbeddingTimeTotal, metrics.EmbeddingCount),
-				AverageSummaryTimeMs:         calculateAverage(metrics.SummaryTimeTotal, metrics.SummaryCount),
-				AverageInsertTimeMs:          calculateAverage(metrics.InsertTimeTotal, metrics.InsertCount),
-				AverageProcessPageTimeMs:     calculateAverage(metrics.ProcessPageTimeTotal, metrics.ProcessPageCount),
-				AverageTokenizeChatTimeMs:    calculateAverage(metrics.TokenizeChatTimeTotal, metrics.TokenizeChatCount),
-				AverageTokenizeEmbedTimeMs:   calculateAverage(metrics.TokenizeEmbedTimeTotal, metrics.TokenizeEmbedCount),
-				AverageDetokenizeChatTimeMs:  calculateAverage(metrics.DetokenizeChatTimeTotal, metrics.DetokenizeChatCount),
-				AverageDetokenizeEmbedTimeMs: calculateAverage(metrics.DetokenizeEmbedTimeTotal, metrics.DetokenizeEmbedCount),
-				TotalEmbeddings:              metrics.EmbeddingCount,
-				TotalSummaries:               metrics.SummaryCount,
-				TotalInserts:                 metrics.InsertCount,
-				TotalPagesProcessed:          metrics.ProcessPageCount,
-				TotalTokenizeChat:            metrics.TokenizeChatCount,
-				TotalTokenizeEmbed:           metrics.TokenizeEmbedCount,
-				TotalDetokenizeChat:          metrics.DetokenizeChatCount,
-				TotalDetokenizeEmbed:         metrics.DetokenizeEmbedCount,
-				PagesPerMinute:               metrics.PagesPerMinute,
-			}
+		// Prepare statistics response - GPU info is now included in ServerStatistics
+		stats := struct {
+			Servers    ai.ClientStatistics          `json:"servers"`
+			Processing wikipedia.ProcessingAverages `json:"processing,omitempty"`
+		}{
+			Servers:    aiClient.GetStatistics(ctx),
+			Processing: wikipediaInstance.GetAverages(),
 		}
-		wikipediaLock.RUnlock()
 
 		// Set headers and encode response
 		w.Header().Set("Content-Type", "application/json")
@@ -266,7 +210,7 @@ func main() {
 	serverDone := make(chan struct{})
 	go func() {
 		logger.Sugar().Infof("HTTP server starting on %s", cfg.Server.HttpAddress)
-		err := server.ListenAndServe()
+		err := httpServer.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			logger.Sugar().Errorf("ListenAndServe http: %v", err)
 		}
@@ -301,9 +245,9 @@ func main() {
 	logger.Sugar().Info("Server shutting down")
 	shutdownCtx, cancelShutdown := context.WithTimeout(appCtx, 3*time.Second)
 	defer cancelShutdown()
-	server.Shutdown(shutdownCtx)
+	httpServer.Shutdown(shutdownCtx)
 	server2.Shutdown(shutdownCtx)
-	server.Close()
+	httpServer.Close()
 	server2.Close()
 	db.Close()
 	logger.Sugar().Info("Server stopped")

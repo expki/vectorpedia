@@ -1,75 +1,44 @@
 package ai
 
-import "context"
+import (
+	"context"
+)
 
+// TokenizeRequest represents a tokenization request
 type TokenizeRequest struct {
+	Model   string `json:"model"`
 	Content string `json:"content"`
-	Model   string `json:"model,omitempty"`
 }
 
+// TokenizeResponse represents a tokenization response
 type TokenizeResponse struct {
 	Tokens []int `json:"tokens"`
+	Count  int   `json:"count"`
 }
 
-type DetokenizeRequest struct {
-	Tokens []int  `json:"tokens"`
-	Model  string `json:"model,omitempty"`
-}
-
-type DetokenizeResponse struct {
-	Content string `json:"content"`
-}
-
-// TokenizeChat tokenizes content for chat queries
-func (c *client) TokenizeChat(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/tokenize", req, &TokenizeResponse{}, "chat")
-	if err != nil {
+// TokenizeChat tokenizes for chat
+func (bc *backendClient) TokenizeChat(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
+	var resp TokenizeResponse
+	if err := bc.doRequest(ctx, "/tokenize/chat", "/tokenize", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*TokenizeResponse), nil
+	return &resp, nil
 }
 
-// TokenizeEmbed tokenizes content for embedding queries
-func (c *client) TokenizeEmbed(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/tokenize", req, &TokenizeResponse{}, "embed")
-	if err != nil {
+// TokenizeEmbed tokenizes for embedding
+func (bc *backendClient) TokenizeEmbed(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
+	var resp TokenizeResponse
+	if err := bc.doRequest(ctx, "/tokenize/embed", "/tokenize", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*TokenizeResponse), nil
+	return &resp, nil
 }
 
-// TokenizeRerank tokenizes content for rerank queries
-func (c *client) TokenizeRerank(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/tokenize", req, &TokenizeResponse{}, "rerank")
-	if err != nil {
+// TokenizeRerank tokenizes for reranking
+func (bc *backendClient) TokenizeRerank(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error) {
+	var resp TokenizeResponse
+	if err := bc.doRequest(ctx, "/tokenize/rerank", "/tokenize", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*TokenizeResponse), nil
-}
-
-// DetokenizeChat detokenizes tokens for chat queries
-func (c *client) DetokenizeChat(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/detokenize", req, &DetokenizeResponse{}, "chat")
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*DetokenizeResponse), nil
-}
-
-// DetokenizeEmbed detokenizes tokens for embedding queries
-func (c *client) DetokenizeEmbed(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/detokenize", req, &DetokenizeResponse{}, "embed")
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*DetokenizeResponse), nil
-}
-
-// DetokenizeRerank detokenizes tokens for rerank queries
-func (c *client) DetokenizeRerank(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error) {
-	resp, err := c.doRequestWithQueryType(ctx, "/detokenize", req, &DetokenizeResponse{}, "rerank")
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*DetokenizeResponse), nil
+	return &resp, nil
 }

@@ -29,16 +29,16 @@ func New(db *database.Database, client ai.Client, ctxChat, ctxEmbed, ctxRerank u
 		contextSizeChat:   ctxChat,
 		contextSizeEmbed:  ctxEmbed,
 		contextSizeRerank: ctxRerank,
-		concurrent:        make(chan struct{}, providers*10),
+		concurrent:        make(chan struct{}, providers*16),
 	}
 }
 
 // ImportFromFile imports Wikipedia data from a compressed XML file
-func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
+func (w *Wikipedia) ImportFromFile(appCtx context.Context, filePath string) error {
 	var writer io.Writer = os.Stderr
 
 	// Check existing pages
-	if err := w.loadExistingPages(ctx, writer); err != nil {
+	if err := w.loadExistingPages(appCtx, writer); err != nil {
 		return fmt.Errorf("failed to load existing pages: %w", err)
 	}
 
@@ -86,7 +86,7 @@ func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
 	barReader := progressbar.NewReader(file, bar)
 
 	// Create a bzip2 reader from the progress bar reader
-	bz2Reader := pbzip2.NewReader(ctx, &barReader)
+	bz2Reader := pbzip2.NewReader(appCtx, &barReader)
 
 	// Create an XML decoder reading from the decompressed stream
 	decoder := xml.NewDecoder(bz2Reader)
@@ -94,9 +94,9 @@ func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
 	// Process the XML tokens
 	for {
 		select {
-		case <-ctx.Done():
+		case <-appCtx.Done():
 			log.Println("Context done. Stopping import.")
-			return ctx.Err()
+			return appCtx.Err()
 		case <-interrupt:
 			log.Println("Interrupt received. Stopping import.")
 			return fmt.Errorf("interrupted")
@@ -124,7 +124,7 @@ func (w *Wikipedia) ImportFromFile(ctx context.Context, filePath string) error {
 				}
 				w.concurrent <- struct{}{}
 				go func() {
-					if err := w.ProcessPage(ctx, page); err != nil {
+					if err := w.ProcessPage(appCtx, page); err != nil {
 						logger.Sugar().Errorf("Error processing page: %v\n", err)
 					}
 					<-w.concurrent

@@ -1,29 +1,33 @@
 package ai
 
-import "context"
+import (
+	"context"
+)
 
+// EmbedRequest represents an embedding request
 type EmbedRequest struct {
-	Model string   `json:"model,omitempty"`
+	Model string   `json:"model"`
 	Input []string `json:"input"`
 }
 
+// EmbedResponse represents an embedding response
 type EmbedResponse struct {
-	Object string      `json:"object"`
-	Data   []Embedding `json:"data"`
-	Model  string      `json:"model"`
-	Usage  Usage       `json:"usage"`
+	Model string      `json:"model"`
+	Data  []Embedding `json:"data"`
+	Usage Usage       `json:"usage,omitempty"`
 }
 
+// Embedding represents a single embedding
 type Embedding struct {
-	Object    string    `json:"object"`
-	Embedding []float32 `json:"embedding"`
 	Index     int       `json:"index"`
+	Embedding []float32 `json:"embedding"`
 }
 
-func (c *client) Embed(ctx context.Context, req *EmbedRequest) (*EmbedResponse, error) {
-	resp, err := c.doRequest(ctx, "/v1/embeddings", req, &EmbedResponse{})
-	if err != nil {
+// Embed generates embeddings
+func (bc *backendClient) Embed(ctx context.Context, req *EmbedRequest) (*EmbedResponse, error) {
+	var resp EmbedResponse
+	if err := bc.doRequest(ctx, "/embed", "/v1/embeddings", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*EmbedResponse), nil
+	return &resp, nil
 }

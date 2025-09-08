@@ -1,29 +1,35 @@
 package ai
 
-import "context"
+import (
+	"context"
+)
 
+// RerankRequest represents a reranking request
 type RerankRequest struct {
+	Model     string   `json:"model"`
 	Query     string   `json:"query"`
 	Documents []string `json:"documents"`
-	Model     string   `json:"model,omitempty"`
+	TopN      int      `json:"top_n,omitempty"`
 }
 
+// RerankResponse represents a reranking response
 type RerankResponse struct {
 	Model   string         `json:"model"`
-	Object  string         `json:"object"`
-	Usage   Usage          `json:"usage"`
 	Results []RerankResult `json:"results"`
 }
 
+// RerankResult represents a single rerank result
 type RerankResult struct {
-	Index          int     `json:"index"`
-	RelevanceScore float64 `json:"relevance_score"`
+	Index    int     `json:"index"`
+	Document string  `json:"document"`
+	Score    float32 `json:"relevance_score"`
 }
 
-func (c *client) Rerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error) {
-	resp, err := c.doRequest(ctx, "/v1/rerank", req, &RerankResponse{})
-	if err != nil {
+// Rerank reranks documents
+func (bc *backendClient) Rerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error) {
+	var resp RerankResponse
+	if err := bc.doRequest(ctx, "/rerank", "/v1/rerank", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*RerankResponse), nil
+	return &resp, nil
 }

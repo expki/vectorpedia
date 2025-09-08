@@ -14,42 +14,45 @@ import (
 func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) (string, error) {
 	systemMsg := "Write a 2-3 sentence factual summary. Start directly with the subject matter. Never use phrases like 'The article describes', 'The text discusses', 'This article is about', 'The provided text', or any meta-commentary. Begin immediately with what the subject IS or DOES."
 	userPrefix := fmt.Sprintf("Title: %s\nContent: ", title)
-	
+
+	// Select backendTokenize server with load balancing
+	backendTokenize := w.client.SelectServer()
+
 	// Tokenize the system message and user prefix to calculate remaining tokens
 	tokenStart := time.Now()
-	systemTokens, err := w.client.TokenizeChat(ctx, &ai.TokenizeRequest{Content: systemMsg})
+	systemTokens, err := backendTokenize.TokenizeChat(ctx, &ai.TokenizeRequest{Content: systemMsg})
 	tokenDuration := time.Since(tokenStart).Nanoseconds()
 	w.updateMetrics(tokenDuration, MetricType_TokenizeChat)
 	if err != nil {
 		return "", fmt.Errorf("failed to tokenize system message: %w", err)
 	}
-	
+
 	tokenStart = time.Now()
-	prefixTokens, err := w.client.TokenizeChat(ctx, &ai.TokenizeRequest{Content: userPrefix})
+	prefixTokens, err := backendTokenize.TokenizeChat(ctx, &ai.TokenizeRequest{Content: userPrefix})
 	tokenDuration = time.Since(tokenStart).Nanoseconds()
 	w.updateMetrics(tokenDuration, MetricType_TokenizeChat)
 	if err != nil {
 		return "", fmt.Errorf("failed to tokenize user prefix: %w", err)
 	}
-	
+
 	// Calculate allowance for content
 	allowance := int(w.contextSizeChat) - len(systemTokens.Tokens) - len(prefixTokens.Tokens) - 100 // Reserve 100 tokens for safety
-	
+
 	// Tokenize content and truncate if needed
 	tokenStart = time.Now()
-	contentTokens, err := w.client.TokenizeChat(ctx, &ai.TokenizeRequest{Content: content})
+	contentTokens, err := backendTokenize.TokenizeChat(ctx, &ai.TokenizeRequest{Content: content})
 	tokenDuration = time.Since(tokenStart).Nanoseconds()
 	w.updateMetrics(tokenDuration, MetricType_TokenizeChat)
 	if err != nil {
 		return "", fmt.Errorf("failed to tokenize content: %w", err)
 	}
-	
+
 	truncatedContent := content
 	if len(contentTokens.Tokens) > allowance && allowance > 0 {
 		// Truncate tokens and detokenize
 		truncatedTokens := contentTokens.Tokens[:allowance]
 		detokenStart := time.Now()
-		detokenized, err := w.client.DetokenizeChat(ctx, &ai.DetokenizeRequest{Tokens: truncatedTokens})
+		detokenized, err := backendTokenize.DetokenizeChat(ctx, &ai.DetokenizeRequest{Tokens: truncatedTokens})
 		detokenDuration := time.Since(detokenStart).Nanoseconds()
 		w.updateMetrics(detokenDuration, MetricType_DetokenizeChat)
 		if err != nil {
@@ -57,7 +60,7 @@ func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) 
 		}
 		truncatedContent = detokenized.Content
 	}
-	
+
 	req := &ai.ChatRequest{
 		Messages: []ai.ChatMessage{
 			{
@@ -73,7 +76,7 @@ func (w *Wikipedia) GenerateSummary(ctx context.Context, title, content string) 
 		Temperature: 0.3,
 	}
 
-	resp, err := w.client.Chat(ctx, req)
+	resp, err := w.client.SelectServerGPU().Chat(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -96,17 +99,20 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]
 	for idx, text := range texts {
 		go func(idx int, text string) {
 			defer wg.Done()
-			
+
+			// Select backendTokens server with GPU load balancing
+			backendTokens := w.client.SelectServer()
+
 			// Tokenize and truncate if needed
 			tokenStart := time.Now()
-			tokenResp, err := w.client.TokenizeEmbed(ctx, &ai.TokenizeRequest{Content: text})
+			tokenResp, err := backendTokens.TokenizeEmbed(ctx, &ai.TokenizeRequest{Content: text})
 			tokenDuration := time.Since(tokenStart).Nanoseconds()
 			w.updateMetrics(tokenDuration, MetricType_TokenizeEmbed)
 			if err != nil {
 				errors[idx] = fmt.Errorf("failed to tokenize: %w", err)
 				return
 			}
-			
+
 			safeText := text
 			// Leave some buffer space (use 95% of context size to be safe)
 			maxTokens := int(w.contextSizeEmbed * 95 / 100)
@@ -114,7 +120,7 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]
 				// Truncate tokens and detokenize
 				truncatedTokens := tokenResp.Tokens[:maxTokens]
 				detokenStart := time.Now()
-				detokenized, err := w.client.DetokenizeEmbed(ctx, &ai.DetokenizeRequest{Tokens: truncatedTokens})
+				detokenized, err := backendTokens.DetokenizeEmbed(ctx, &ai.DetokenizeRequest{Tokens: truncatedTokens})
 				detokenDuration := time.Since(detokenStart).Nanoseconds()
 				w.updateMetrics(detokenDuration, MetricType_DetokenizeEmbed)
 				if err != nil {
@@ -127,7 +133,7 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]
 			req := &ai.EmbedRequest{
 				Input: []string{safeText},
 			}
-			resp, err := w.client.Embed(ctx, req)
+			resp, err := w.client.SelectServerGPU().Embed(ctx, req)
 			if err != nil {
 				errors[idx] = err
 				return

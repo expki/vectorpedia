@@ -2,281 +2,216 @@ package ai
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
-	"math/rand/v2"
-	"net/http"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/expki/vectorpedia/logger"
-	"github.com/klauspost/compress/zstd"
-	"golang.org/x/net/http2"
 )
 
+// Client manages multiple backend servers and provides server selection
 type Client interface {
-	// Chat sends a chat completion request
-	Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error)
+	// Server Selection Methods
+	SelectServer() BackendClient
+	SelectServerGPU() BackendClient
+	AllServers() []BackendClient
 
-	// Embed generates embeddings for the given input
-	Embed(ctx context.Context, req *EmbedRequest) (*EmbedResponse, error)
-
-	// Rerank reranks documents based on relevance to a query
-	Rerank(ctx context.Context, req *RerankRequest) (*RerankResponse, error)
-
-	// TokenizeChat tokenizes content for chat queries
-	TokenizeChat(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error)
-
-	// TokenizeEmbed tokenizes content for embedding queries
-	TokenizeEmbed(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error)
-
-	// TokenizeRerank tokenizes content for rerank queries
-	TokenizeRerank(ctx context.Context, req *TokenizeRequest) (*TokenizeResponse, error)
-
-	// DetokenizeChat detokenizes tokens for chat queries
-	DetokenizeChat(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error)
-
-	// DetokenizeEmbed detokenizes tokens for embedding queries
-	DetokenizeEmbed(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error)
-
-	// DetokenizeRerank detokenizes tokens for rerank queries
-	DetokenizeRerank(ctx context.Context, req *DetokenizeRequest) (*DetokenizeResponse, error)
-
-	// Close cleans up resources used by the client
+	// Management
 	Close()
-
-	// GetStatistics returns server statistics
-	GetStatistics() ClientStatistics
+	GetStatistics(ctx context.Context) ClientStatistics
 }
 
+// client manages multiple backend servers
 type client struct {
-	httpClient     *http.Client
-	clientRequests int64
-	clientMu       sync.Mutex
-
-	token   string
-	servers []*server
-	encoder *zstd.Encoder
-	decoder *zstd.Decoder
+	servers []BackendClient
 	mu      sync.RWMutex
-	appCtx  context.Context
+	ctx     context.Context
+	cancel  context.CancelFunc
 }
 
-type server struct {
-	url            string
-	activeRequests atomic.Int64
-	totalRequests  atomic.Int64
-	isHealthy      atomic.Bool
+// GPUInfo represents information about a single GPU
+type GPUInfo struct {
+	Index       int     `json:"index"`
+	Name        string  `json:"name"`
+	MemoryUsed  uint64  `json:"memory_used_bytes"`
+	MemoryTotal uint64  `json:"memory_total_bytes"`
+	MemoryUsage float64 `json:"memory_usage_percent"`
+	CoreUsage   uint32  `json:"core_usage_percent"`
+	Temperature uint32  `json:"temperature_celsius"`
+	PowerDraw   uint32  `json:"power_draw_watts"`
 }
 
-type Usage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
+// EndpointStats tracks performance metrics for an endpoint
+type EndpointStats struct {
+	AverageMs float64 `json:"average_ms"`
+	MinMs     float64 `json:"min_ms"`
+	MaxMs     float64 `json:"max_ms"`
+	LastMs    float64 `json:"last_ms"`
 }
 
+// EndpointMetrics contains timing metrics for all endpoints
+type EndpointMetrics struct {
+	Chat             EndpointStats `json:"chat,omitempty"`
+	Embed            EndpointStats `json:"embed,omitempty"`
+	Rerank           EndpointStats `json:"rerank,omitempty"`
+	TokenizeChat     EndpointStats `json:"tokenize_chat,omitempty"`
+	TokenizeEmbed    EndpointStats `json:"tokenize_embed,omitempty"`
+	TokenizeRerank   EndpointStats `json:"tokenize_rerank,omitempty"`
+	DetokenizeChat   EndpointStats `json:"detokenize_chat,omitempty"`
+	DetokenizeEmbed  EndpointStats `json:"detokenize_embed,omitempty"`
+	DetokenizeRerank EndpointStats `json:"detokenize_rerank,omitempty"`
+}
+
+// ServerStatistics contains stats for a single server
 type ServerStatistics struct {
-	URL            string `json:"url"`
-	IsHealthy      bool   `json:"is_healthy"`
-	TotalRequests  int64  `json:"total_requests"`
-	ActiveRequests int64  `json:"active_requests"`
+	URL            string           `json:"url"`
+	IsHealthy      bool             `json:"is_healthy"`
+	TotalRequests  int64            `json:"total_requests"`
+	ActiveRequests int64            `json:"active_requests"`
+	GPUCount       int32            `json:"gpu_count"`
+	GPUs           []GPUInfo        `json:"gpus,omitempty"`
+	GPUError       string           `json:"gpu_error,omitempty"`
+	Endpoints      *EndpointMetrics `json:"endpoints,omitempty"`
 }
 
+// ClientStatistics contains stats for all servers
 type ClientStatistics struct {
 	Servers []ServerStatistics `json:"servers"`
 }
 
+// gpuResponse represents GPU info from backend
+type gpuResponse struct {
+	GPUs  []GPUInfo `json:"gpus"`
+	Count int       `json:"count"`
+	Error string    `json:"error,omitempty"`
+}
+
+// NewClient creates a new AI client managing multiple backends
 func NewClient(appCtx context.Context, urls []string, token string) (Client, error) {
 	if len(urls) == 0 {
 		return nil, fmt.Errorf("at least one URL must be provided")
 	}
 
-	httpClient, err := createHTTPClient()
-	if err != nil {
-		return nil, err
-	}
+	ctx, cancel := context.WithCancel(appCtx)
 
-	encoder, err := zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedDefault))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create zstd encoder: %w", err)
+	// Create backend clients for each URL in parallel
+	type result struct {
+		client BackendClient
+		err    error
+		url    string
 	}
-
-	decoder, err := zstd.NewReader(nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create zstd decoder: %w", err)
+	
+	results := make(chan result, len(urls))
+	var wg sync.WaitGroup
+	wg.Add(len(urls))
+	
+	for _, url := range urls {
+		go func(url string) {
+			defer wg.Done()
+			bc, err := NewBackendClient(ctx, url, token)
+			results <- result{client: bc, err: err, url: url}
+		}(url)
 	}
-
-	servers := make([]*server, len(urls))
-	for i, url := range urls {
-		servers[i] = &server{
-			url: url,
+	
+	// Wait for all goroutines to complete
+	wg.Wait()
+	close(results)
+	
+	// Collect successful clients
+	servers := make([]BackendClient, 0, len(urls))
+	for res := range results {
+		if res.err != nil {
+			logger.Sugar().Warnf("failed to create backend client for %s: %v", res.url, res.err)
+			continue
 		}
-		servers[i].isHealthy.Store(true) // Assume healthy initially
+		servers = append(servers, res.client)
 	}
 
-	c := &client{
-		token:      token,
-		servers:    servers,
-		httpClient: httpClient,
-		encoder:    encoder,
-		decoder:    decoder,
-		appCtx:     appCtx,
+	if len(servers) == 0 {
+		cancel()
+		return nil, fmt.Errorf("failed to create any backend clients")
 	}
 
-	// Start health checks for all servers
-	for _, srv := range servers {
-		go c.healthCheck(srv)
-	}
-
-	return c, nil
-}
-
-func createHTTPClient() (*http.Client, error) {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
-		IdleConnTimeout: 20 * time.Second,
-		MaxIdleConns:    5,
-	}
-	err := http2.ConfigureTransport(transport)
-	if err != nil {
-		return nil, fmt.Errorf("http2 transport: %v", err)
-	}
-
-	return &http.Client{
-		Transport: transport,
+	return &client{
+		servers: servers,
+		ctx:     ctx,
+		cancel:  cancel,
 	}, nil
 }
 
+// Close shuts down all backend clients
 func (c *client) Close() {
-	c.encoder.Close()
-	c.decoder.Close()
+	c.cancel()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, server := range c.servers {
+		server.Close()
+	}
 }
 
-func (c *client) getHTTPClient() (*http.Client, error) {
-	c.clientMu.Lock()
-	defer c.clientMu.Unlock()
-	c.clientRequests += 1
-
-	if c.clientRequests <= 200 {
-		return c.httpClient, nil
-	}
-	c.clientRequests = 0
-
-	var err error
-	prevClient := c.httpClient
-	c.httpClient, err = createHTTPClient()
-	if err != nil {
-		return nil, err
-	}
-
-	// Close the old HTTP client's idle connections
-	if prevClient.Transport != nil {
-		if transport, ok := prevClient.Transport.(*http2.Transport); ok {
-			transport.CloseIdleConnections()
-		}
-	}
-
-	return c.httpClient, nil
-}
-
-func (c *client) selectServer() (*server, func()) {
+// SelectServer selects the backend with the least active requests
+func (c *client) SelectServer() BackendClient {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// Filter healthy servers
-	var healthyServers []*server
-	for _, srv := range c.servers {
-		if srv.isHealthy.Load() {
-			healthyServers = append(healthyServers, srv)
-		}
-	}
+	var selected BackendClient = c.servers[0]
+	var minRequests int64 = selected.ActiveRequests()
 
-	// If no healthy servers, return nil
-	if len(healthyServers) == 0 {
-		return nil, func() {}
-	}
-
-	// Select server with least active requests from healthy servers
-	server := healthyServers[rand.IntN(len(healthyServers))]
-	requests := server.activeRequests.Load()
-
-	for _, challengerServer := range healthyServers {
-		challengerRequests := challengerServer.activeRequests.Load()
-		if challengerRequests >= requests {
+	for _, server := range c.servers {
+		if !server.IsHealthy() {
 			continue
 		}
-		server = challengerServer
-		requests = challengerRequests
+
+		requests := server.ActiveRequests()
+		if requests < minRequests {
+			selected = server
+			minRequests = requests
+		}
 	}
 
-	server.activeRequests.Add(1)
-	server.totalRequests.Add(1)
-	return server, func() {
-		server.activeRequests.Add(-1)
-	}
+	return selected
 }
 
-func (c *client) healthCheck(srv *server) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
+// SelectServerGPU selects the backend with the least active requests per GPU
+func (c *client) SelectServerGPU() BackendClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	// Do initial health check
-	c.checkServerHealth(srv)
+	var selected BackendClient = c.servers[0]
+	var minRequestsPerGPU float64 = selected.ActiveRequestsPerGPU()
 
-	for {
-		select {
-		case <-c.appCtx.Done():
-			return
-		case <-ticker.C:
-			c.checkServerHealth(srv)
+	for _, server := range c.servers {
+		if !server.IsHealthy() {
+			continue
+		}
+
+		requestsPerGPU := server.ActiveRequestsPerGPU()
+		if requestsPerGPU < minRequestsPerGPU {
+			selected = server
+			minRequestsPerGPU = requestsPerGPU
 		}
 	}
+
+	return selected
 }
 
-func (c *client) checkServerHealth(srv *server) {
-	wasHealthy := srv.isHealthy.Load()
-	ctx, cancel := context.WithTimeout(c.appCtx, 5*time.Second)
-	defer cancel()
+// AllServers returns all healthy backend servers
+func (c *client) AllServers() []BackendClient {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-	req, err := http.NewRequestWithContext(ctx, "GET", srv.url+"/ping", nil)
-	if err != nil {
-		if wasHealthy {
-			srv.isHealthy.Store(false)
-			logger.Sugar().Warnf("server is down: %s", srv.url)
+	var healthy []BackendClient
+	for _, server := range c.servers {
+		if server.IsHealthy() {
+			healthy = append(healthy, server)
 		}
-		return
-	}
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		if wasHealthy {
-			srv.isHealthy.Store(false)
-			logger.Sugar().Warnf("server is down: %s", srv.url)
-		}
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusOK {
-		if !wasHealthy {
-			srv.isHealthy.Store(true)
-			logger.Sugar().Infof("server is up: %s", srv.url)
-		}
-	} else {
-		if wasHealthy {
-			srv.isHealthy.Store(false)
-			logger.Sugar().Warnf("server is down: %s", srv.url)
-		}
-	}
+	return healthy
 }
 
-func (c *client) GetStatistics() ClientStatistics {
+// GetStatistics returns statistics for all servers
+func (c *client) GetStatistics(ctx context.Context) ClientStatistics {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -284,14 +219,15 @@ func (c *client) GetStatistics() ClientStatistics {
 		Servers: make([]ServerStatistics, len(c.servers)),
 	}
 
-	for i, srv := range c.servers {
-		stats.Servers[i] = ServerStatistics{
-			URL:            srv.url,
-			IsHealthy:      srv.isHealthy.Load(),
-			TotalRequests:  srv.totalRequests.Load(),
-			ActiveRequests: srv.activeRequests.Load(),
-		}
+	var wg sync.WaitGroup
+	wg.Add(len(c.servers))
+	for i, server := range c.servers {
+		wg.Go(func() {
+			stats.Servers[i] = server.GetStatistics(ctx)
+			wg.Done()
+		})
 	}
+	wg.Wait()
 
 	return stats
 }

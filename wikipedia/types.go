@@ -31,6 +31,27 @@ type ProcessingMetrics struct {
 	PagesPerMinute          float64   // Average pages processed per minute
 }
 
+// ProcessingAverages holds average timing statistics
+type ProcessingAverages struct {
+	AverageEmbeddingTimeMs       float64 `json:"average_embedding_time_ms"`
+	AverageSummaryTimeMs         float64 `json:"average_summary_time_ms"`
+	AverageInsertTimeMs          float64 `json:"average_insert_time_ms"`
+	AverageProcessPageTimeMs     float64 `json:"average_process_page_time_ms"`
+	AverageTokenizeChatTimeMs    float64 `json:"average_tokenize_chat_time_ms"`
+	AverageTokenizeEmbedTimeMs   float64 `json:"average_tokenize_embed_time_ms"`
+	AverageDetokenizeChatTimeMs  float64 `json:"average_detokenize_chat_time_ms"`
+	AverageDetokenizeEmbedTimeMs float64 `json:"average_detokenize_embed_time_ms"`
+	TotalEmbeddings              int64   `json:"total_embeddings"`
+	TotalSummaries               int64   `json:"total_summaries"`
+	TotalInserts                 int64   `json:"total_inserts"`
+	TotalPagesProcessed          int64   `json:"total_pages_processed"`
+	TotalTokenizeChat            int64   `json:"total_tokenize_chat"`
+	TotalTokenizeEmbed           int64   `json:"total_tokenize_embed"`
+	TotalDetokenizeChat          int64   `json:"total_detokenize_chat"`
+	TotalDetokenizeEmbed         int64   `json:"total_detokenize_embed"`
+	PagesPerMinute               float64 `json:"pages_per_minute"`
+}
+
 // Wikipedia manages the import process
 type Wikipedia struct {
 	importedLock      sync.RWMutex
@@ -43,6 +64,16 @@ type Wikipedia struct {
 	concurrent        chan struct{}
 	metrics           ProcessingMetrics
 	metricsLock       sync.RWMutex
+	
+	// Duration slices (store up to 100 samples)
+	embeddingDurations       []float64
+	summaryDurations         []float64
+	insertDurations          []float64
+	processPageDurations     []float64
+	tokenizeChatDurations    []float64
+	tokenizeEmbedDurations   []float64
+	detokenizeChatDurations  []float64
+	detokenizeEmbedDurations []float64
 }
 
 // Page represents a Wikipedia page with full content

@@ -1,42 +1,47 @@
 package ai
 
-import "context"
+import (
+	"context"
+)
 
+// ChatRequest represents a chat completion request
 type ChatRequest struct {
-	Model       string        `json:"model,omitempty"`
+	Model       string        `json:"model"`
 	Messages    []ChatMessage `json:"messages"`
-	Stream      bool          `json:"stream"`
-	Temperature float32       `json:"temperature,omitempty"`
+	Stream      bool          `json:"stream,omitempty"`
 	MaxTokens   int           `json:"max_tokens,omitempty"`
-	TopP        float32       `json:"top_p,omitempty"`
-	TopK        int           `json:"top_k,omitempty"`
-	Stop        []string      `json:"stop,omitempty"`
+	Temperature float32       `json:"temperature,omitempty"`
 }
 
+// ChatMessage represents a chat message
 type ChatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
+// Message is an alias for ChatMessage for backward compatibility
+type Message = ChatMessage
+
+// ChatResponse represents a chat completion response
 type ChatResponse struct {
-	ID      string       `json:"id"`
-	Object  string       `json:"object"`
-	Created int64        `json:"created"`
-	Model   string       `json:"model"`
-	Choices []ChatChoice `json:"choices"`
-	Usage   Usage        `json:"usage,omitempty"`
+	ID      string   `json:"id"`
+	Model   string   `json:"model"`
+	Choices []Choice `json:"choices"`
+	Usage   Usage    `json:"usage,omitempty"`
 }
 
-type ChatChoice struct {
-	Index        int         `json:"index"`
-	Message      ChatMessage `json:"message"`
-	FinishReason string      `json:"finish_reason,omitempty"`
+// Choice represents a response choice
+type Choice struct {
+	Index        int     `json:"index"`
+	Message      Message `json:"message"`
+	FinishReason string  `json:"finish_reason,omitempty"`
 }
 
-func (c *client) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
-	resp, err := c.doRequest(ctx, "/v1/chat/completions", req, &ChatResponse{})
-	if err != nil {
+// Chat sends a chat completion request
+func (bc *backendClient) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+	var resp ChatResponse
+	if err := bc.doRequest(ctx, "/chat", "/v1/chat/completions", req, &resp); err != nil {
 		return nil, err
 	}
-	return resp.(*ChatResponse), nil
+	return &resp, nil
 }
