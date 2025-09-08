@@ -75,7 +75,7 @@ export function Statistics() {
   const [error, setError] = useState<string | null>(null);
   const [selectedServer, setSelectedServer] = useState<string>('all');
   const [showHealthyOnly, setShowHealthyOnly] = useState(false);
-  const [sortBy, setSortBy] = useState<'requests' | 'gpu' | 'memory'>('requests');
+  const [sortBy, setSortBy] = useState<'server' | 'requests' | 'gpu' | 'memory'>('server');
   const [refreshInterval, setRefreshInterval] = useState(5000);
   const [autoRefresh, setAutoRefresh] = useState(true);
 
@@ -132,6 +132,8 @@ export function Statistics() {
 
   const sortedServers = [...filteredServers].sort((a, b) => {
     switch (sortBy) {
+      case 'server':
+        return a.url.localeCompare(b.url);
       case 'requests':
         return b.total_requests - a.total_requests;
       case 'gpu':
@@ -212,6 +214,7 @@ export function Statistics() {
                   <Form.Group>
                     <Form.Label>Sort By</Form.Label>
                     <Form.Select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+                      <option value="server">Server</option>
                       <option value="requests">Total Requests</option>
                       <option value="gpu">GPU Count</option>
                       <option value="memory">Memory Usage</option>
@@ -388,6 +391,7 @@ export function Statistics() {
                   <tr>
                     <th>Status</th>
                     <th>Server</th>
+                    <th>GPU Name</th>
                     <th>GPUs</th>
                     <th>Total Requests</th>
                     <th>Active</th>
@@ -405,6 +409,7 @@ export function Statistics() {
                     const avgMemUsage = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / server.gpus.length : 0;
                     const avgTemp = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.temperature_celsius, 0) / server.gpus.length : 0;
                     const totalPower = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.power_draw_watts, 0) : 0;
+                    const firstGpuName = server.gpus?.length > 0 ? server.gpus[0].name : 'N/A';
                     
                     return (
                       <tr key={server.url}>
@@ -414,6 +419,7 @@ export function Statistics() {
                           </Badge>
                         </td>
                         <td style={{ fontSize: '0.85em' }}>{server.url}</td>
+                        <td style={{ fontSize: '0.85em' }}>{firstGpuName}</td>
                         <td>{server.gpu_count}</td>
                         <td>{server.total_requests.toLocaleString()}</td>
                         <td>
