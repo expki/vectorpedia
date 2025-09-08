@@ -386,6 +386,26 @@ func (bc *backendClient) doRequest(ctx context.Context, name string, endpoint st
 	if bc.token != "" {
 		req.Header.Set("Authorization", "Bearer "+bc.token)
 	}
+	switch endpoint {
+	case "/chat":
+		req.Header.Set("Query-Type", "chat")
+	case "/embed":
+		req.Header.Set("Query-Type", "embed")
+	case "/rerank":
+		req.Header.Set("Query-Type", "rerank")
+	case "/tokenize/chat":
+		req.Header.Set("Query-Type", "chat")
+	case "/tokenize/embed":
+		req.Header.Set("Query-Type", "embed")
+	case "/tokenize/rerank":
+		req.Header.Set("Query-Type", "rerank")
+	case "/detokenize/chat":
+		req.Header.Set("Query-Type", "chat")
+	case "/detokenize/embed":
+		req.Header.Set("Query-Type", "embed")
+	case "/detokenize/rerank":
+		req.Header.Set("Query-Type", "rerank")
+	}
 
 	// Send request
 	resp, err := bc.httpClient.Do(req)
