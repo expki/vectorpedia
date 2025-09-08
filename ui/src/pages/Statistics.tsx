@@ -410,7 +410,7 @@ export function Statistics() {
                     const avgMemUsage = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / server.gpus.length : 0;
                     const avgTemp = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.temperature_celsius, 0) / server.gpus.length : 0;
                     const totalPower = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.power_draw_watts, 0) : 0;
-                    const firstGpuName = server.gpus?.length > 0 ? server.gpus[0].name : 'N/A';
+                    const firstGpuName = server.gpus && server.gpus.length > 0 ? server.gpus[0].name : 'N/A';
                     
                     return (
                       <tr key={server.url}>
