@@ -182,8 +182,27 @@ func main() {
 	// Statistics endpoint
 	mux.Handle("/api/statistics", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.StatisticsHandler)))))
 
-	// Routes: Files
-	mux.Handle("/", middlewareHeaders(middlewareDecompression(middlewareCompression(http.FileServerFS(static.Files)))))
+	// Routes: Files - serve static files with SPA fallback
+	fileServer := http.FileServerFS(static.Files)
+	mux.Handle("/{path...}", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Check if the file exists in the static files
+		path := r.URL.Path
+		if path == "/" {
+			path = "/index.html"
+		}
+		
+		// Try to open the file
+		file, err := static.Files.Open(strings.TrimPrefix(path, "/"))
+		if err == nil {
+			file.Close()
+			// File exists, serve it normally
+			fileServer.ServeHTTP(w, r)
+		} else {
+			// File doesn't exist, serve index.html for React routing
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+		}
+	})))))
 
 	// Start servers
 	serverDone := make(chan struct{})

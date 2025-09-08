@@ -1,5 +1,8 @@
 #!/bin/bash
-
+rm -rf static/assets
+cd ui
+npm run build
+cd ..
 if ! command -v gcc &> /dev/null; then
     sudo apt update && sudo apt install gcc -y
 fi
