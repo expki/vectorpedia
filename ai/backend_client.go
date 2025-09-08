@@ -193,8 +193,8 @@ func createBackendHTTPClient() (*http.Client, error) {
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
 		},
-		IdleConnTimeout: 20 * time.Second,
-		MaxIdleConns:    2,
+		IdleConnTimeout: 60 * time.Second,
+		MaxIdleConns:    5,
 	}
 
 	if err := http2.ConfigureTransport(transport); err != nil {

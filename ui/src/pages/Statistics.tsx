@@ -26,7 +26,7 @@ interface ServerStats {
   total_requests: number;
   active_requests: number;
   gpu_count: number;
-  gpus: GPUInfo[];
+  gpus?: GPUInfo[];
   endpoints: {
     chat: EndpointStats;
     embed: EndpointStats;
@@ -137,8 +137,8 @@ export function Statistics() {
       case 'gpu':
         return b.gpu_count - a.gpu_count;
       case 'memory':
-        const aMemUsage = a.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / a.gpus.length;
-        const bMemUsage = b.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / b.gpus.length;
+        const aMemUsage = a.gpus?.length ? a.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / a.gpus.length : 0;
+        const bMemUsage = b.gpus?.length ? b.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / b.gpus.length : 0;
         return bMemUsage - aMemUsage;
       default:
         return 0;
@@ -150,11 +150,11 @@ export function Statistics() {
     name: server.url.split('://')[1]?.split(':')[0] || server.url,
     requests: server.total_requests,
     active: server.active_requests,
-    avgGpuUsage: server.gpus.reduce((sum, gpu) => sum + gpu.core_usage_percent, 0) / server.gpus.length
+    avgGpuUsage: server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.core_usage_percent, 0) / server.gpus.length : 0
   }));
 
   const gpuDistribution = sortedServers.reduce((acc, server) => {
-    server.gpus.forEach(gpu => {
+    server.gpus?.forEach(gpu => {
       const name = gpu.name.replace('NVIDIA GeForce ', '');
       acc[name] = (acc[name] || 0) + 1;
     });
@@ -401,10 +401,10 @@ export function Statistics() {
                 </thead>
                 <tbody>
                   {sortedServers.map(server => {
-                    const avgGpuUsage = server.gpus.reduce((sum, gpu) => sum + gpu.core_usage_percent, 0) / server.gpus.length;
-                    const avgMemUsage = server.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / server.gpus.length;
-                    const avgTemp = server.gpus.reduce((sum, gpu) => sum + gpu.temperature_celsius, 0) / server.gpus.length;
-                    const totalPower = server.gpus.reduce((sum, gpu) => sum + gpu.power_draw_watts, 0);
+                    const avgGpuUsage = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.core_usage_percent, 0) / server.gpus.length : 0;
+                    const avgMemUsage = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / server.gpus.length : 0;
+                    const avgTemp = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.temperature_celsius, 0) / server.gpus.length : 0;
+                    const totalPower = server.gpus?.length ? server.gpus.reduce((sum, gpu) => sum + gpu.power_draw_watts, 0) : 0;
                     
                     return (
                       <tr key={server.url}>
