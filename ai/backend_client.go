@@ -386,7 +386,7 @@ func (bc *backendClient) doRequest(ctx context.Context, name string, endpoint st
 	if bc.token != "" {
 		req.Header.Set("Authorization", "Bearer "+bc.token)
 	}
-	switch endpoint {
+	switch name {
 	case "/chat":
 		req.Header.Set("Query-Type", "chat")
 	case "/embed":
@@ -443,8 +443,8 @@ func (bc *backendClient) doRequest(ctx context.Context, name string, endpoint st
 }
 
 // recordEndpointTiming records timing for an endpoint
-func (bc *backendClient) recordEndpointTiming(endpoint string, milliseconds float64) {
-	switch endpoint {
+func (bc *backendClient) recordEndpointTiming(name string, milliseconds float64) {
+	switch name {
 	case "/chat":
 		bc.endpointMetrics.chat.add(milliseconds)
 	case "/embed":
