@@ -26,7 +26,7 @@ export function SearchPage() {
     try {
       const response = await Search({text: searchTerm ?? '', count: 20, offset: 0});
       setSearchResults(response.documents ?? []);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch search results. Please try again.');
     } finally {
       setIsLoading(false);

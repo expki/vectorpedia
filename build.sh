@@ -1,6 +1,7 @@
 #!/bin/bash
 rm -rf static/assets
 cd ui
+npm i
 npm run build
 cd ..
 if ! command -v gcc &> /dev/null; then

@@ -138,10 +138,11 @@ export function Statistics() {
         return b.total_requests - a.total_requests;
       case 'gpu':
         return b.gpu_count - a.gpu_count;
-      case 'memory':
+      case 'memory': {
         const aMemUsage = a.gpus?.length ? a.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / a.gpus.length : 0;
         const bMemUsage = b.gpus?.length ? b.gpus.reduce((sum, gpu) => sum + gpu.memory_usage_percent, 0) / b.gpus.length : 0;
         return bMemUsage - aMemUsage;
+      }
       default:
         return 0;
     }
@@ -213,7 +214,7 @@ export function Statistics() {
                 <Col md={2}>
                   <Form.Group>
                     <Form.Label>Sort By</Form.Label>
-                    <Form.Select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+                    <Form.Select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'server' | 'requests' | 'gpu' | 'memory')}>
                       <option value="server">Server</option>
                       <option value="requests">Total Requests</option>
                       <option value="gpu">GPU Count</option>
