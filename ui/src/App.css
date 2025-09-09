@@ -17,7 +17,7 @@ body {
 /* App container */
 .app-container {
   background: transparent !important;
-  min-height: calc(100vh - 76px);
+  min-height: 100vh;
   padding: 40px 0;
 }
 
@@ -37,7 +37,7 @@ h1 {
 
 .search-container:focus-within {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15) !important;
+  box-shadow: 0 12px 40px rgba(0, 102, 255, 0.15) !important;
 }
 
 .search-input {
@@ -47,7 +47,7 @@ h1 {
 
 .search-input:focus {
   background-color: #222 !important;
-  border-color: rgba(102, 126, 234, 0.3) !important;
+  border-color: rgba(0, 102, 255, 0.3) !important;
   box-shadow: none !important;
 }
 
@@ -60,7 +60,7 @@ h1 {
 
 .search-button:hover:not(:disabled) {
   transform: translateX(2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
 }
 
 .search-button:active:not(:disabled) {
@@ -164,7 +164,7 @@ h1 {
 .search-result:hover {
   transform: translateY(-2px) scale(1.01);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
-  border-color: rgba(102, 126, 234, 0.2) !important;
+  border-color: rgba(0, 102, 255, 0.2) !important;
 }
 
 .search-result .card-body {
@@ -275,7 +275,7 @@ h1 {
 }
 
 .fancy-title {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0066ff 0%, #00a2ff 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -310,25 +310,40 @@ h1 {
 }
 
 .form-check-input:hover {
-  border-color: rgba(102, 126, 234, 0.4);
+  border-color: rgba(0, 102, 255, 0.4);
 }
 
 .form-check-input:checked {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0066ff 0%, #00a2ff 100%);
   border-color: transparent;
 }
 
 .form-check-input:focus {
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+  box-shadow: 0 0 0 0.2rem rgba(0, 102, 255, 0.15);
 }
 
 .form-switch .form-check-input {
   width: 2.5rem;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255, 255, 255, 0.5%29'/%3e%3c/svg%3e");
+  height: 1.25rem;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255, 255, 255, 0.8%29'/%3e%3c/svg%3e") !important;
+  background-position: left center !important;
+  border-radius: 2rem;
+  transition: background-position .15s ease-in-out, background-color .15s ease-in-out;
 }
 
 .form-switch .form-check-input:checked {
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='white'/%3e%3c/svg%3e");
+  background-position: right center !important;
+  background-color: #0066ff !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='white'/%3e%3c/svg%3e") !important;
+}
+
+.form-switch .form-check-input:focus {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255, 255, 255, 0.8%29'/%3e%3c/svg%3e") !important;
+}
+
+.form-switch .form-check-input:checked:focus {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='white'/%3e%3c/svg%3e") !important;
 }
 
 /* Search stats */

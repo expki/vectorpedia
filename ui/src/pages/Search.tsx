@@ -63,7 +63,7 @@ export function SearchPage() {
             <div className="text-center mb-5">
               <h1 className="display-4 mb-3 fancy-title" style={{fontWeight: 300, letterSpacing: '2px'}}>Vectorpedia</h1>
               <p className="text-muted mb-3" style={{fontSize: '1.1rem', fontWeight: 300}}>
-                Semantic search across Wikipedia's knowledge base
+                Vector search across Wikipedia's knowledge base
               </p>
               <div className="text-muted" style={{fontSize: '0.9rem', opacity: 0.8}}>
                 {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • {' '}
@@ -99,11 +99,11 @@ export function SearchPage() {
                     fontSize: '1.1rem',
                     padding: '0 32px',
                     borderRadius: '0 16px 16px 0',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    background: 'linear-gradient(135deg, #0066ff 0%, #00a2ff 100%)',
                     border: 'none'
                   }}
                 >
-                  {isLoading ? <Spinner animation="border" size="sm" /> : 'Search'}
+                  Search
                 </Button>
               </div>
               
@@ -135,9 +135,9 @@ export function SearchPage() {
                   />
                   <div className="vr mx-2 d-none d-md-block" style={{height: '20px', opacity: 0.3}} />
                   <Form.Check
-                    type="switch"
+                    type="checkbox"
                     id="use-rerank"
-                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>&ensp;Reranking</span>}
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>Reranking</span>}
                     checked={useRerank}
                     onChange={(e) => setUseRerank(e.target.checked)}
                     className="mb-2 mb-md-0"
@@ -195,7 +195,7 @@ export function SearchPage() {
 
 function SearchResultCard({ result }: { result: SearchResult }) {
   const scorePercent = (result.score * 100).toFixed(1);
-  const sourceColor = result.source === 'title' ? '#667eea' : 
+  const sourceColor = result.source === 'title' ? '#0066ff' : 
                        result.source === 'summary' ? '#48bb78' : '#4299e1';
   const sourceLabel = result.source === 'title' ? 'Title Match' : 
                       result.source === 'summary' ? 'Summary Match' : 'Content Match';
