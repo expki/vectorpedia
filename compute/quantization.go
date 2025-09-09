@@ -180,7 +180,12 @@ func DequantizeMatrixFloat64(matrixQuantized [][]uint8) (matrix [][]float64) {
 }
 
 func rangeFloat[T float32 | float64](slice []T) (min T, max T) {
-	for _, v := range slice {
+	if len(slice) == 0 {
+		return 0, 0
+	}
+	min = slice[0]
+	max = slice[0]
+	for _, v := range slice[1:] {
 		if v < min {
 			min = v
 		}
@@ -192,7 +197,12 @@ func rangeFloat[T float32 | float64](slice []T) (min T, max T) {
 }
 
 func rangeFloat32(slice []float32) (min float32, max float32) {
-	for _, v := range slice {
+	if len(slice) == 0 {
+		return 0, 0
+	}
+	min = slice[0]
+	max = slice[0]
+	for _, v := range slice[1:] {
 		if v < min {
 			min = v
 		}
@@ -204,7 +214,12 @@ func rangeFloat32(slice []float32) (min float32, max float32) {
 }
 
 func rangeFloat64(slice []float64) (min float64, max float64) {
-	for _, v := range slice {
+	if len(slice) == 0 {
+		return 0, 0
+	}
+	min = slice[0]
+	max = slice[0]
+	for _, v := range slice[1:] {
 		if v < min {
 			min = v
 		}
