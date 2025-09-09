@@ -95,18 +95,17 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 		}
 
 		// check for convergence using cosine similarity
-		converged = true
 		if n > 0 {
-			threshold := float32(0.9999) // Nearly identical vectors
+			converged = true
+			const threshold float64 = 0.9999 // Nearly identical vectors
 			for i := range meanVectors {
 				if counts[i] <= 0 {
 					continue
 				}
 				currentVec := compute.NewVector(meanVectors[i])
-				// Create single-row matrix for previous vector
-				prevMatrix := compute.NewMatrix([][]float64{prevMeanVectors[i]})
-				similarities := currentVec.Clone().MatrixCosineSimilarity(prevMatrix.Clone())
-				if similarities[0] < threshold {
+				prevVec := compute.NewVector(prevMeanVectors[i])
+				similarity := currentVec.Clone().VectorCosineSimilarity(prevVec.Clone())
+				if similarity < threshold {
 					converged = false
 					break
 				}
@@ -205,18 +204,17 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 		}
 
 		// Check for convergence using cosine similarity
-		converged = true
 		if n > 0 {
-			threshold := float32(0.9999) // Nearly identical vectors
+			converged = true
+			const threshold float64 = 0.9999 // Nearly identical vectors
 			for i := range meanVectors {
 				if counts[i] <= 0 {
 					continue
 				}
 				currentVec := compute.NewVector(meanVectors[i])
-				// Create single-row matrix for previous vector
-				prevMatrix := compute.NewMatrix([][]float64{prevMeanVectors[i]})
-				similarities := currentVec.Clone().MatrixCosineSimilarity(prevMatrix.Clone())
-				if similarities[0] < threshold {
+				prevVec := compute.NewVector(prevMeanVectors[i])
+				similarity := currentVec.Clone().VectorCosineSimilarity(prevVec.Clone())
+				if similarity < threshold {
 					converged = false
 					break
 				}

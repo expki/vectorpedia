@@ -6,8 +6,32 @@ import (
 	"gonum.org/v1/gonum/blas/blas64"
 )
 
+// VectorCosineSimilarity computes the cosine similarity between two vectors.
+func (vector1 *vectorContainer) VectorCosineSimilarity(vector2 Vector) float64 {
+	realVector2 := (vector2.(*vectorContainer))
+	A := vector1.data
+	B := realVector2.data
+	AShape := vector1.shape
+	BShape := realVector2.shape
+	if AShape.cols != BShape.cols {
+		logger.Sugar().Fatalf("vector/vector column size does not match: %d != %d", AShape.cols, BShape.cols)
+	}
+	dim := AShape.cols
+
+	impl := blas64.Implementation()
+
+	// Normalize both vectors
+	normalizeVector(A, dim)
+	normalizeVector(B, dim)
+
+	// Compute dot product (cosine similarity of normalized vectors)
+	similarity := impl.Ddot(dim, A, 1, B, 1)
+
+	return similarity
+}
+
 // MatrixCosineSimilarity facilitates the computation of cosine similarity between a vector and a matrix with single graph.
-func (vector *vectorContainer) MatrixCosineSimilarity(matrix Matrix) (similarity []float32) {
+func (vector *vectorContainer) MatrixCosineSimilarity(matrix Matrix) (similarity []float64) {
 	realMatrix := (matrix.(*matrixContainer))
 	A := vector.data
 	B := realMatrix.data
@@ -33,19 +57,12 @@ func (vector *vectorContainer) MatrixCosineSimilarity(matrix Matrix) (similarity
 		scores[i] = impl.Ddot(dim, B[i*dim:], 1, A, 1)
 	}
 
-	// Convert to float32 and find argmax
-	sims := make([]float32, n)
-
-	for i := range n {
-		sims[i] = float32(scores[i])
-	}
-
-	return sims
+	return scores
 }
 
 // MatrixCosineSimilarity facilitates the computation of cosine similarity between a matrix and a matrix with single graph.
 // The first matrix is the input matrix and the second matrix is the batch of vectors to compare against.
-func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relativeSimilaritieList []float32, nearestIndexList []int) {
+func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relativeSimilaritieList []float64, nearestIndexList []int) {
 	realMatrix2 := (matrix2.(*matrixContainer))
 	A := matrix1.data     // Centroids
 	B := realMatrix2.data // Data
@@ -81,9 +98,7 @@ func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relative
 	)
 
 	// Extract results: for each row in B, find best match in A
-	sims := make([]float32, len(C)) // n * m
-	argmax := make([]int, n)        // one best match per row of B
-
+	argmax := make([]int, n) // one best match per row of B
 	for i := range n {
 		rowOffset := i * m
 		maxIdx := 0
@@ -91,7 +106,6 @@ func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relative
 
 		for j := range m {
 			v := C[rowOffset+j]
-			sims[rowOffset+j] = float32(v)
 			if v > maxVal {
 				maxVal = v
 				maxIdx = j
@@ -100,7 +114,7 @@ func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relative
 		argmax[i] = maxIdx
 	}
 
-	return sims, argmax
+	return C, argmax
 }
 
 // normalizeMatrixRows normalizes each row vector by dividing each element by its L2 norm.

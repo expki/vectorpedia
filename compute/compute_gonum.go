@@ -35,7 +35,7 @@ func NewMatrix(matrix [][]float64) Matrix {
 	if rows == 0 {
 		panic("matrix rows are empty")
 	}
-	cols := len(matrix[0]) - 8
+	cols := len(matrix[0])
 	if cols <= 0 {
 		panic("matrix columns are empty")
 	}
