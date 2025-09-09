@@ -31,6 +31,7 @@ func (w *Wikipedia) Record(title string) {
 // ProcessPage processes a single Wikipedia page
 func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	title := strings.TrimSpace(page.Title)
+	safeTitle := strings.ReplaceAll(title, "|", "")
 	if title == "" {
 		return nil
 	}
@@ -76,12 +77,15 @@ func (w *Wikipedia) ProcessPage(ctx context.Context, page *Page) error {
 	if err != nil {
 		return fmt.Errorf("failed to chunk content for '%s': %w", title, err)
 	}
+	for idx, chunk := range chunks {
+		chunks[idx] = fmt.Sprintf("title: %s | text: %s", safeTitle, chunk)
+	}
 
 	// Prepare all texts for batch embedding
 	embeddingTexts := make([]string, 0, 2+len(chunks))
-	embeddingTexts = append(embeddingTexts, title)     // Index 0: title
-	embeddingTexts = append(embeddingTexts, summary)   // Index 1: summary
-	embeddingTexts = append(embeddingTexts, chunks...) // Index 2+: content chunks
+	embeddingTexts = append(embeddingTexts, fmt.Sprintf("title: none | text: %s", title))            // Index 0: title
+	embeddingTexts = append(embeddingTexts, fmt.Sprintf("title: %s | text: %s", safeTitle, summary)) // Index 1: summary
+	embeddingTexts = append(embeddingTexts, chunks...)                                               // Index 2+: content chunks
 
 	// Generate all embeddings in a single batch request
 	embedStart := time.Now()

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 
@@ -82,7 +83,9 @@ func (s *Server) SearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	embedReq := &ai.EmbedRequest{
 		Model: "embed",
-		Input: []string{req.Query},
+		Input: []string{
+			fmt.Sprintf("task: search result | query: %s", req.Query),
+		},
 	}
 
 	embedResp, err := backend.Embed(ctx, embedReq)

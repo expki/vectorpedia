@@ -37,6 +37,7 @@ func main() {
 		configPath    = flag.String("config", "", "Path to configuration file (required)")
 		wikipediaPath = flag.String("wikipedia", "", "Path to Wikipedia compressed XML file for import (optional)")
 		reindex       = flag.Bool("reindex", false, "Trigger K-means clustering to reindex embeddings (optional)")
+		reembed       = flag.Bool("reembed", false, "Regenerate embeddings for all titles and summaries (optional)")
 		showHelp      = flag.Bool("help", false, "Show help information")
 	)
 
@@ -54,6 +55,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --config config.json --wikipedia wikipedia-dump.xml.br\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  # Reindex embeddings with K-means clustering\n")
 		fmt.Fprintf(os.Stderr, "  %s --config config.json --reindex\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Regenerate embeddings for titles and summaries\n")
+		fmt.Fprintf(os.Stderr, "  %s --config config.json --reembed\n\n", os.Args[0])
 	}
 
 	flag.Parse()
@@ -166,6 +169,23 @@ func main() {
 				logger.Sugar().Errorf("K-means reindexing failed: %v", err)
 			} else {
 				logger.Sugar().Info("K-means reindexing completed successfully")
+			}
+		}()
+	}
+
+	// Reembed titles and summaries if requested
+	if *reembed {
+		if logger.Sugar().Level() != zapcore.DebugLevel {
+			cfg.LogLevel.Zap().SetLevel(zap.ErrorLevel)
+		}
+		go func() {
+			logger.Sugar().Info("Starting to regenerate embeddings for titles and summaries...")
+			err = wikipediaInstance.ReembedEmbeddings(appCtx)
+			cfg.LogLevel.Zap().SetLevel(original)
+			if err != nil {
+				logger.Sugar().Errorf("Reembedding failed: %v", err)
+			} else {
+				logger.Sugar().Info("Reembedding completed successfully")
 			}
 		}()
 	}
