@@ -5,6 +5,8 @@ import (
 
 	"context"
 	"crypto/tls"
+	"flag"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -17,6 +19,7 @@ import (
 	"github.com/expki/vectorpedia/ai"
 	"github.com/expki/vectorpedia/config"
 	"github.com/expki/vectorpedia/database"
+	"github.com/expki/vectorpedia/dnc"
 	"github.com/expki/vectorpedia/logger"
 	"github.com/expki/vectorpedia/server"
 	"github.com/expki/vectorpedia/static"
@@ -24,28 +27,66 @@ import (
 
 	"github.com/klauspost/compress/zstd"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/net/http2"
 )
 
 func main() {
+	// Parse command-line flags
+	var (
+		configPath    = flag.String("config", "", "Path to configuration file (required)")
+		wikipediaPath = flag.String("wikipedia", "", "Path to Wikipedia compressed XML file for import (optional)")
+		reindex       = flag.Bool("reindex", false, "Trigger K-means clustering to reindex embeddings (optional)")
+		showHelp      = flag.Bool("help", false, "Show help information")
+	)
+
+	// Custom usage function
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Vectorpedia - Vector search engine for Wikipedia data\n\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n")
+		fmt.Fprintf(os.Stderr, "  %s --config <path> [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Start server with config file\n")
+		fmt.Fprintf(os.Stderr, "  %s --config config.json\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Import Wikipedia data\n")
+		fmt.Fprintf(os.Stderr, "  %s --config config.json --wikipedia wikipedia-dump.xml.br\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Reindex embeddings with K-means clustering\n")
+		fmt.Fprintf(os.Stderr, "  %s --config config.json --reindex\n\n", os.Args[0])
+	}
+
+	flag.Parse()
+
+	// Show help if requested
+	if *showHelp {
+		flag.Usage()
+		os.Exit(0)
+	}
+
+	// Validate required flags
+	if *configPath == "" {
+		fmt.Fprintf(os.Stderr, "Error: --config flag is required\n\n")
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	appCtx, stopApp := context.WithCancel(context.Background())
 	defer stopApp()
 
 	// Load config
-	var configPath string = os.Args[1]
-	log.Default().Printf("Config path: %s\n", configPath)
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		log.Default().Printf("Creating sample config: %s\n", configPath)
-		err = config.CreateSample(configPath)
+	log.Default().Printf("Config path: %s\n", *configPath)
+	if _, err := os.Stat(*configPath); os.IsNotExist(err) {
+		log.Default().Printf("Creating sample config: %s\n", *configPath)
+		err = config.CreateSample(*configPath)
 		if err != nil {
 			log.Fatalf("CreateSample: %v", err)
 		}
 	}
 	log.Default().Println("Reading config...")
-	configRaw, err := os.ReadFile(configPath)
+	configRaw, err := os.ReadFile(*configPath)
 	if err != nil {
-		log.Fatalf("ReadFile %q: %v", configPath, err)
+		log.Fatalf("ReadFile %q: %v", *configPath, err)
 	}
 	log.Default().Println("Parsing config...")
 	cfg, err := config.ParseConfig(configRaw)
@@ -94,13 +135,37 @@ func main() {
 	// Server
 	srv := server.NewServer(db, aiClient, wikipediaInstance)
 
-	// Import
-	if len(os.Args) > 2 {
+	// Import Wikipedia if path provided
+	original := cfg.LogLevel.Zap().Level()
+	if *wikipediaPath != "" {
+		if logger.Sugar().Level() != zapcore.DebugLevel {
+			cfg.LogLevel.Zap().SetLevel(zap.ErrorLevel)
+		}
 		go func() {
-			logger.Sugar().Info("Loading Wikipedia...")
-			err = wikipediaInstance.ImportFromFile(appCtx, os.Args[2])
+			logger.Sugar().Infof("Loading Wikipedia from: %s", *wikipediaPath)
+			err = wikipediaInstance.ImportFromFile(appCtx, *wikipediaPath)
+			cfg.LogLevel.Zap().SetLevel(original)
 			if err != nil {
-				logger.Sugar().Fatalf("wikipedia import: %v", err)
+				logger.Sugar().Fatalf("Wikipedia import: %v", err)
+			} else {
+				logger.Sugar().Info("Wikipedia import completed successfully")
+			}
+		}()
+	}
+
+	// Reindex embeddings if requested
+	if *reindex {
+		if logger.Sugar().Level() != zapcore.DebugLevel {
+			cfg.LogLevel.Zap().SetLevel(zap.ErrorLevel)
+		}
+		go func() {
+			logger.Sugar().Info("Starting K-means clustering to reindex embeddings...")
+			err = dnc.KMeansDivideAndConquer(appCtx, db)
+			cfg.LogLevel.Zap().SetLevel(original)
+			if err != nil {
+				logger.Sugar().Errorf("K-means reindexing failed: %v", err)
+			} else {
+				logger.Sugar().Info("K-means reindexing completed successfully")
 			}
 		}()
 	}
@@ -190,7 +255,7 @@ func main() {
 		if path == "/" {
 			path = "/index.html"
 		}
-		
+
 		// Try to open the file
 		file, err := static.Files.Open(strings.TrimPrefix(path, "/"))
 		if err == nil {
