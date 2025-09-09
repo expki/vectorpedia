@@ -4,20 +4,55 @@ import (
 	"slices"
 )
 
-func NewVector(vectorQuantized []uint8) Vector {
-	cols := len(vectorQuantized) - 8
+func NewVector(vector []float64) Vector {
+	cols := len(vector)
 	if cols <= 0 {
 		panic("vector columns are empty")
 	}
 	return &vectorContainer{
-		data: DequantizeVectorFloat64(vectorQuantized),
+		data: vector,
 		shape: vectorShape{
 			cols: cols,
 		},
 	}
 }
 
-func NewMatrix(matrixQuantized [][]uint8) Matrix {
+func NewVectorQuantized(vectorQuantized []uint8) Vector {
+	cols := len(vectorQuantized) - 8
+	if cols <= 0 {
+		panic("vector columns are empty")
+	}
+	return &vectorContainer{
+		data: DequantizeVector(vectorQuantized),
+		shape: vectorShape{
+			cols: cols,
+		},
+	}
+}
+
+func NewMatrix(matrix [][]float64) Matrix {
+	rows := len(matrix)
+	if rows == 0 {
+		panic("matrix rows are empty")
+	}
+	cols := len(matrix[0]) - 8
+	if cols <= 0 {
+		panic("matrix columns are empty")
+	}
+	flat := make([]float64, rows*cols)
+	for i, row := range matrix {
+		copy(flat[i*cols:], row)
+	}
+	return &matrixContainer{
+		data: flat,
+		shape: matrixShape{
+			rows: rows,
+			cols: cols,
+		},
+	}
+}
+
+func NewMatrixQuantized(matrixQuantized [][]uint8) Matrix {
 	rows := len(matrixQuantized)
 	if rows == 0 {
 		panic("matrix rows are empty")
@@ -26,7 +61,7 @@ func NewMatrix(matrixQuantized [][]uint8) Matrix {
 	if cols <= 0 {
 		panic("matrix columns are empty")
 	}
-	matrix := DequantizeMatrixFloat64(matrixQuantized)
+	matrix := DequantizeMatrix(matrixQuantized)
 	flat := make([]float64, rows*cols)
 	for i, row := range matrix {
 		copy(flat[i*cols:], row)

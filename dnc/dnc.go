@@ -65,7 +65,7 @@ func KMeansDivideAndConquer(ctx context.Context, db *database.Database) (err err
 	}
 
 	// create dataset writer
-	dataWriter, err := newDataset(&atomic.Int64{}, len(compute.DequantizeVectorFloat32(embedding.Vector)), tempDirPath)
+	dataWriter, err := newDataset(&atomic.Int64{}, len(compute.DequantizeVector(embedding.Vector)), tempDirPath)
 	if err != nil {
 		return errors.Join(errors.New("failed to create file writer"), err)
 	}
@@ -169,7 +169,7 @@ func KMeansDivideAndConquer(ctx context.Context, db *database.Database) (err err
 	// compute
 	calculate, done := compute.MatrixCosineSimilarity()
 	defer done()
-	centroidMatrix := compute.NewMatrix(centroids)
+	centroidMatrix := compute.NewMatrixQuantized(centroids)
 
 	// re-assing to new centroids
 	logger.Sugar().Debug("Re-assigning embeddings to updated centroids")
@@ -199,7 +199,7 @@ func KMeansDivideAndConquer(ctx context.Context, db *database.Database) (err err
 			for idx, embedding := range updates {
 				data[idx] = embedding.Vector
 			}
-			dataMatrix := compute.NewMatrix(data)
+			dataMatrix := compute.NewMatrixQuantized(data)
 			_, centroidIndexes := calculate(centroidMatrix.Clone(), dataMatrix)
 
 			// group embeddings by nearest centroids
@@ -330,7 +330,7 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 			),
 		),
 	)
-	centroidsMatrix := compute.NewMatrix(centroids)
+	centroidsMatrix := compute.NewMatrixQuantized(centroids)
 
 	// create dataset writers
 	dataWriterList := make([]*createDataset, len(centroids))
@@ -367,7 +367,7 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 		if len(minibatch) < config.BATCH_SIZE_CACHE {
 			continue
 		}
-		dataMatrix := compute.NewMatrix(minibatch)
+		dataMatrix := compute.NewMatrixQuantized(minibatch)
 		_, idxList := cosineSim(centroidsMatrix.Clone(), dataMatrix)
 		for idx, nearestCentroidIdx := range idxList {
 			dataWriterList[nearestCentroidIdx].WriteRow(minibatch[idx])
@@ -377,7 +377,7 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 	}
 
 	if len(minibatch) > 0 {
-		dataMatrix := compute.NewMatrix(minibatch)
+		dataMatrix := compute.NewMatrixQuantized(minibatch)
 		_, idxList := cosineSim(centroidsMatrix.Clone(), dataMatrix)
 		for idx, nearestCentroidIdx := range idxList {
 			dataWriterList[nearestCentroidIdx].WriteRow(minibatch[idx])
@@ -409,7 +409,7 @@ func recenterDbCentroid(ctx context.Context, multibar *mpb.Progress, db *databas
 	defer bar.EnableTriggerComplete()
 
 	// load centroid embeddings
-	dataSum := make([]float64, len(compute.DequantizeVectorFloat64(centroid.Vector)))
+	dataSum := make([]float64, len(compute.DequantizeVector(centroid.Vector)))
 	var count uint64 = 0
 	var embeddings []database.Embedding
 	err = db.WithContext(ctx).Clauses(dbresolver.Read).
@@ -421,7 +421,7 @@ func recenterDbCentroid(ctx context.Context, multibar *mpb.Progress, db *databas
 				return nil
 			}
 			for _, embedding := range embeddings {
-				for idx, val := range compute.DequantizeVectorFloat64(embedding.Vector) {
+				for idx, val := range compute.DequantizeVector(embedding.Vector) {
 					dataSum[idx] += val
 				}
 				count++
@@ -441,7 +441,7 @@ func recenterDbCentroid(ctx context.Context, multibar *mpb.Progress, db *databas
 	for idx, val := range dataSum {
 		dataSum[idx] = val / float64(count)
 	}
-	meanVector := compute.QuantizeVectorFloat64(dataSum)
+	meanVector := compute.QuantizeVector(dataSum)
 
 	// update centroid vector
 	centroid.Vector = meanVector
@@ -489,7 +489,7 @@ func dropSmallCentroids(ctx context.Context, multibar *mpb.Progress, db *databas
 	for idx, item := range results {
 		centroids[idx] = item.Vector
 	}
-	centroidMatrix := compute.NewMatrix(centroids)
+	centroidMatrix := compute.NewMatrixQuantized(centroids)
 
 	// create new cosine similarity graph
 	cosineSim, closeGraph := compute.MatrixCosineSimilarity()
@@ -527,7 +527,7 @@ func dropSmallCentroids(ctx context.Context, multibar *mpb.Progress, db *databas
 					for idx, embedding := range embeddings {
 						data[idx] = embedding.Vector
 					}
-					dataMatrix := compute.NewMatrix(data)
+					dataMatrix := compute.NewMatrixQuantized(data)
 					updates := make(map[uint64][]uint64, len(centroids))
 					_, centroidIds := cosineSim(centroidMatrix.Clone(), dataMatrix)
 					for embeddingIdx, centroidId := range centroidIds {

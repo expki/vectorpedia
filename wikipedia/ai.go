@@ -142,7 +142,7 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]
 				errors[idx] = fmt.Errorf("no embedding returned")
 				return
 			}
-			output[idx] = compute.QuantizeVectorFloat32(resp.Data[0].Embedding)
+			output[idx] = compute.QuantizeVector(resp.Data[0].Embedding)
 		}(idx, text)
 	}
 	wg.Wait()

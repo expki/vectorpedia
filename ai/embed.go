@@ -20,7 +20,7 @@ type EmbedResponse struct {
 // Embedding represents a single embedding
 type Embedding struct {
 	Index     int       `json:"index"`
-	Embedding []float32 `json:"embedding"`
+	Embedding []float64 `json:"embedding"`
 }
 
 // Embed generates embeddings
