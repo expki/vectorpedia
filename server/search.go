@@ -265,94 +265,110 @@ func (s *Server) searchEmbeddings(ctx context.Context, queryVector []float64, so
 
 	pageScoreMap := make(map[uint64]*pageScore)
 
-	// Process each scored embedding to find associated pages
-	for _, scored := range scoredResults {
-		var pageID uint64
+	// Collect embedding IDs by source type for batch queries
+	titleEmbeddingIDs := make([]uint64, 0)
+	summaryEmbeddingIDs := make([]uint64, 0)
+	contentEmbeddingIDs := make([]uint64, 0)
+	embeddingScoreMap := make(map[uint64]float64)
 
+	for _, scored := range scoredResults {
+		embeddingScoreMap[scored.embedding.ID] = scored.score
 		switch scored.embedding.Source {
 		case database.EmbeddingSource_Title:
-			var title database.Title
-			err := s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Where("embedding_id = ?", scored.embedding.ID).
-				First(&title).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find title for embedding %d: %v", scored.embedding.ID, err)
-				}
-				continue
-			}
-
-			var page database.Page
-			err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Where("title_id = ?", title.ID).
-				First(&page).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find page for title %d: %v", title.ID, err)
-				}
-				continue
-			}
-			pageID = page.ID
-
+			titleEmbeddingIDs = append(titleEmbeddingIDs, scored.embedding.ID)
 		case database.EmbeddingSource_Summary:
-			var summary database.Summary
-			err := s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Where("embedding_id = ?", scored.embedding.ID).
-				First(&summary).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find summary for embedding %d: %v", scored.embedding.ID, err)
-				}
-				continue
-			}
-
-			var page database.Page
-			err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Where("summary_id = ?", summary.ID).
-				First(&page).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find page for summary %d: %v", summary.ID, err)
-				}
-				continue
-			}
-			pageID = page.ID
-
+			summaryEmbeddingIDs = append(summaryEmbeddingIDs, scored.embedding.ID)
 		case database.EmbeddingSource_Content:
-			var contentEmbedding struct {
-				ContentID uint64
-			}
-			err := s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Table("content_embeddings").
-				Where("embedding_id = ?", scored.embedding.ID).
-				First(&contentEmbedding).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find content for embedding %d: %v", scored.embedding.ID, err)
-				}
-				continue
-			}
-
-			var page database.Page
-			err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
-				Where("content_id = ?", contentEmbedding.ContentID).
-				First(&page).Error
-			if err != nil {
-				if err != gorm.ErrRecordNotFound {
-					logger.Sugar().Warnf("Failed to find page for content %d: %v", contentEmbedding.ContentID, err)
-				}
-				continue
-			}
-			pageID = page.ID
+			contentEmbeddingIDs = append(contentEmbeddingIDs, scored.embedding.ID)
 		}
+	}
 
-		// Keep only the highest scoring embedding for each page
-		if existing, exists := pageScoreMap[pageID]; !exists || scored.score > existing.score {
-			pageScoreMap[pageID] = &pageScore{
-				pageID:    pageID,
-				embedding: scored.embedding,
-				score:     scored.score,
-				source:    scored.embedding.Source,
+	// Batch query for title embeddings with joined pages
+	if len(titleEmbeddingIDs) > 0 {
+		type TitlePageResult struct {
+			EmbeddingID uint64
+			PageID      uint64
+		}
+		var titleResults []TitlePageResult
+		err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
+			Table("titles").
+			Select("titles.embedding_id, pages.id as page_id").
+			Joins("INNER JOIN pages ON pages.title_id = titles.id").
+			Where("titles.embedding_id IN ?", titleEmbeddingIDs).
+			Scan(&titleResults).Error
+		if err != nil {
+			logger.Sugar().Errorf("Failed to fetch title pages: %v", err)
+		} else {
+			for _, result := range titleResults {
+				if score, exists := embeddingScoreMap[result.EmbeddingID]; exists {
+					if existing, pageExists := pageScoreMap[result.PageID]; !pageExists || score > existing.score {
+						pageScoreMap[result.PageID] = &pageScore{
+							pageID: result.PageID,
+							score:  score,
+							source: database.EmbeddingSource_Title,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Batch query for summary embeddings with joined pages
+	if len(summaryEmbeddingIDs) > 0 {
+		type SummaryPageResult struct {
+			EmbeddingID uint64
+			PageID      uint64
+		}
+		var summaryResults []SummaryPageResult
+		err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
+			Table("summaries").
+			Select("summaries.embedding_id, pages.id as page_id").
+			Joins("INNER JOIN pages ON pages.summary_id = summaries.id").
+			Where("summaries.embedding_id IN ?", summaryEmbeddingIDs).
+			Scan(&summaryResults).Error
+		if err != nil {
+			logger.Sugar().Errorf("Failed to fetch summary pages: %v", err)
+		} else {
+			for _, result := range summaryResults {
+				if score, exists := embeddingScoreMap[result.EmbeddingID]; exists {
+					if existing, pageExists := pageScoreMap[result.PageID]; !pageExists || score > existing.score {
+						pageScoreMap[result.PageID] = &pageScore{
+							pageID: result.PageID,
+							score:  score,
+							source: database.EmbeddingSource_Summary,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Batch query for content embeddings with joined pages
+	if len(contentEmbeddingIDs) > 0 {
+		type ContentPageResult struct {
+			EmbeddingID uint64
+			PageID      uint64
+		}
+		var contentResults []ContentPageResult
+		err = s.db.WithContext(ctx).Clauses(dbresolver.Read).
+			Table("content_embeddings").
+			Select("content_embeddings.embedding_id, pages.id as page_id").
+			Joins("INNER JOIN pages ON pages.content_id = content_embeddings.content_id").
+			Where("content_embeddings.embedding_id IN ?", contentEmbeddingIDs).
+			Scan(&contentResults).Error
+		if err != nil {
+			logger.Sugar().Errorf("Failed to fetch content pages: %v", err)
+		} else {
+			for _, result := range contentResults {
+				if score, exists := embeddingScoreMap[result.EmbeddingID]; exists {
+					if existing, pageExists := pageScoreMap[result.PageID]; !pageExists || score > existing.score {
+						pageScoreMap[result.PageID] = &pageScore{
+							pageID: result.PageID,
+							score:  score,
+							source: database.EmbeddingSource_Content,
+						}
+					}
+				}
 			}
 		}
 	}
