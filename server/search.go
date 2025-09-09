@@ -126,6 +126,10 @@ func (s *Server) SearchHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			logger.Sugar().Warnf("Reranking failed, returning original results: %v", err)
 		}
+		// Final sort of all results (descending by score)
+		slices.SortFunc(results, func(a, b SearchResult) int {
+			return cmp.Compare(b.Score, a.Score)
+		})
 	} else if len(results) > req.Limit {
 		results = results[:req.Limit]
 	}
