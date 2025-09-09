@@ -144,44 +144,61 @@ h1 {
 /* Search results */
 .search-result {
   border: none;
-  background-color: #1e1e1e !important;
-  transition: all 0.3s ease;
-  margin-bottom: 16px;
-  border-radius: 12px !important;
+  background-color: #1a1a1a !important;
+  transition: all 0.2s ease;
+  margin-bottom: 12px;
+  border-radius: 8px !important;
   overflow: hidden;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .search-result:hover {
-  background-color: #252525 !important;
-  transform: translateY(-3px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  background-color: #222222 !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .search-result .card-body {
-  padding: 20px;
+  padding: 16px 20px;
 }
 
-.search-result .card-title {
-  margin-bottom: 12px;
-  font-weight: 600;
+.search-result h5 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
 }
 
-.search-result .card-title a {
-  color: #4dabf7;
+.search-result h5 a {
+  color: #6bb6ff;
   text-decoration: none;
   transition: color 0.2s ease;
+  font-weight: 500;
 }
 
-.search-result .card-title a:hover {
-  color: #74c0fc;
+.search-result h5 a:hover {
+  color: #88c4ff;
   text-decoration: underline;
 }
 
 .search-result .card-text {
-  color: #adb5bd;
+  color: #b8bdc3;
   font-size: 0.95rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.search-result small a {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.search-result small a:hover {
+  color: #9ca3af;
+}
+
+/* Badges */
+.badge {
+  font-weight: 500;
+  padding: 4px 8px;
+  font-size: 0.75rem;
 }
 
 /* File upload area */
@@ -260,4 +277,32 @@ h1 {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Search form checkboxes and switches */
+.form-check {
+  color: #b8bdc3;
+}
+
+.form-check-input {
+  background-color: #2c2c2c;
+  border-color: #495057;
+}
+
+.form-check-input:checked {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
+}
+
+.form-check-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.form-switch .form-check-input {
+  width: 2.5rem;
+}
+
+/* Search stats */
+.text-muted {
+  font-size: 0.9rem;
 }

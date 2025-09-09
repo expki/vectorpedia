@@ -1,20 +1,27 @@
 export type SearchRequest = {
-    text: string,
-    count: number,
-    offset: number,
+  query: string;
+  locations: {
+    title: boolean;
+    summary: boolean;
+    content: boolean;
+  };
+  rerank: boolean;
+  limit?: number;
 };
 
 export type SearchResponse = {
-	documents: Array<DocumentSearch> | null,
-}
+  results: SearchResult[];
+  count: number;
+};
 
-export type DocumentSearch = {
-  name: string,
-	external_id: string,
-  document: string,
-	document_id: number,
-	document_similarity: number,
-}
+export type SearchResult = {
+  page_id: number;
+  uri: string;
+  title: string;
+  summary?: string;
+  score: number;
+  source: string;
+};
 
 export async function Search(request: SearchRequest): Promise<SearchResponse> {
   try {
