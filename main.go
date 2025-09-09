@@ -246,6 +246,8 @@ func main() {
 	// Routes: API
 	// Statistics endpoint
 	mux.Handle("/api/statistics", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.StatisticsHandler)))))
+	// Search endpoint
+	mux.Handle("/api/search", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.SearchHandler)))))
 
 	// Routes: Files - serve static files with SPA fallback
 	fileServer := http.FileServerFS(static.Files)
