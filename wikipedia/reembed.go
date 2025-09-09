@@ -123,22 +123,38 @@ func (w *Wikipedia) processPageBatch(ctx context.Context, pages []database.Page,
 		return fmt.Errorf("failed to generate embeddings: %w", err)
 	}
 
-	// Update embeddings in database using a transaction for better performance
-	err = w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for i, embedding := range embeddings {
-			// Update each embedding's vector column
-			if err := tx.Model(&database.Embedding{}).
-				Where("id = ?", embeddingIDs[i]).
-				Update("vector", embedding).Error; err != nil {
-				return fmt.Errorf("failed to update embedding %d: %w", embeddingIDs[i], err)
-			}
-		}
-		bar.Add(1)
-		return nil
-	})
-	if err != nil {
-		return err
+	type unit struct {
+		embeddings   [][]byte
+		embeddingIDs []uint64
 	}
+
+	saveLockChan <- struct{}{}
+	go func(item *unit) {
+		// Update embeddings in database using a transaction for better performance
+		err = w.db.WithContext(ctx).Clauses(dbresolver.Write).Transaction(func(tx *gorm.DB) error {
+			for i, embedding := range embeddings {
+				// Update each embedding's vector column
+				if err := tx.Model(&database.Embedding{}).
+					Where("id = ?", embeddingIDs[i]).
+					Update("vector", embedding).Error; err != nil {
+					return fmt.Errorf("failed to update embedding %d: %w", embeddingIDs[i], err)
+				}
+				bar.Add(1)
+			}
+			return nil
+		})
+		if err != nil {
+			logger.Sugar().Errorf("Failed to update embeddings: %v", err)
+		}
+		<-saveLockChan
+	}(&unit{
+		embeddings:   embeddings,
+		embeddingIDs: embeddingIDs,
+	})
 
 	return nil
 }
+
+var (
+	saveLockChan chan struct{} = make(chan struct{}, 1)
+)
