@@ -167,8 +167,6 @@ func KMeansDivideAndConquer(ctx context.Context, db *database.Database) (err err
 	}
 
 	// compute
-	calculate, done := compute.MatrixCosineSimilarity()
-	defer done()
 	centroidMatrix := compute.NewMatrixQuantized(centroids)
 
 	// re-assing to new centroids
@@ -200,7 +198,7 @@ func KMeansDivideAndConquer(ctx context.Context, db *database.Database) (err err
 				data[idx] = embedding.Vector
 			}
 			dataMatrix := compute.NewMatrixQuantized(data)
-			_, centroidIndexes := calculate(centroidMatrix.Clone(), dataMatrix)
+			_, centroidIndexes := centroidMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone())
 
 			// group embeddings by nearest centroids
 			updateMap := make(map[uint64][]uint64, len(centroids))
@@ -342,10 +340,6 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 		}
 	}
 
-	// create new cosine similarity graph
-	cosineSim, closeGraph := compute.MatrixCosineSimilarity()
-	defer closeGraph()
-
 	// progress bar
 	bar := multibar.AddBar(
 		int64(X.total),
@@ -368,7 +362,7 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 			continue
 		}
 		dataMatrix := compute.NewMatrixQuantized(minibatch)
-		_, idxList := cosineSim(centroidsMatrix.Clone(), dataMatrix)
+		_, idxList := centroidsMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone())
 		for idx, nearestCentroidIdx := range idxList {
 			dataWriterList[nearestCentroidIdx].WriteRow(minibatch[idx])
 		}
@@ -378,7 +372,7 @@ func divideNconquer(ctx context.Context, multibar *mpb.Progress, concurrent *ato
 
 	if len(minibatch) > 0 {
 		dataMatrix := compute.NewMatrixQuantized(minibatch)
-		_, idxList := cosineSim(centroidsMatrix.Clone(), dataMatrix)
+		_, idxList := (centroidsMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone()))
 		for idx, nearestCentroidIdx := range idxList {
 			dataWriterList[nearestCentroidIdx].WriteRow(minibatch[idx])
 		}
@@ -491,9 +485,6 @@ func dropSmallCentroids(ctx context.Context, multibar *mpb.Progress, db *databas
 	}
 	centroidMatrix := compute.NewMatrixQuantized(centroids)
 
-	// create new cosine similarity graph
-	cosineSim, closeGraph := compute.MatrixCosineSimilarity()
-	defer closeGraph()
 	var wg sync.WaitGroup
 	for _, oldCentroid := range oldCentroids {
 		queue <- struct{}{}
@@ -529,7 +520,7 @@ func dropSmallCentroids(ctx context.Context, multibar *mpb.Progress, db *databas
 					}
 					dataMatrix := compute.NewMatrixQuantized(data)
 					updates := make(map[uint64][]uint64, len(centroids))
-					_, centroidIds := cosineSim(centroidMatrix.Clone(), dataMatrix)
+					_, centroidIds := centroidMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone())
 					for embeddingIdx, centroidId := range centroidIds {
 						mapId := uint64(centroidId)
 						embeddingId := embeddings[embeddingIdx].ID

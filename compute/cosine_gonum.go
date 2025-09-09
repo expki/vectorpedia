@@ -43,13 +43,6 @@ func (vector *vectorContainer) MatrixCosineSimilarity(matrix Matrix) (similarity
 	return sims
 }
 
-// VectorMatrixCosineSimilarity facilitates the computation of cosine similarity between a vector and a matrix with reusable graph.
-func VectorMatrixCosineSimilarity() (calculate func(vector Vector, matrix Matrix) (similarity []float32), done func()) {
-	return func(vector Vector, matrix Matrix) (similarity []float32) {
-		return vector.MatrixCosineSimilarity(matrix)
-	}, func() {}
-}
-
 // MatrixCosineSimilarity facilitates the computation of cosine similarity between a matrix and a matrix with single graph.
 // The first matrix is the input matrix and the second matrix is the batch of vectors to compare against.
 func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relativeSimilaritieList []float32, nearestIndexList []int) {
@@ -108,14 +101,6 @@ func (matrix1 *matrixContainer) MatrixCosineSimilarity(matrix2 Matrix) (relative
 	}
 
 	return sims, argmax
-}
-
-// MatrixCosineSimilarity facilitates the computation of cosine similarity between a matrix and a matrix with reusable graph.
-// The first matrix is the input matrix and the second matrix is the batch of vectors to compare against.
-func MatrixCosineSimilarity() (calculate func(matrix1 Matrix, matrix2 Matrix) (relativeSimilaritieList []float32, nearestIndexList []int), done func()) {
-	return func(matrix1 Matrix, matrix2 Matrix) (relativeSimilaritieList []float32, nearestIndexList []int) {
-		return matrix1.MatrixCosineSimilarity(matrix2)
-	}, func() {}
 }
 
 // normalizeMatrixRows normalizes each row vector by dividing each element by its L2 norm.
