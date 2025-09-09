@@ -446,6 +446,7 @@ func recenterDbCentroid(ctx context.Context, multibar *mpb.Progress, db *databas
 	// update centroid vector
 	centroid.Vector = meanVector
 	return db.WithContext(ctx).Clauses(dbresolver.Write).
+		Omit(clause.Associations).
 		Save(&centroid).
 		Error
 }
