@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col, Form, Button, Card, Spinner, Badge } from 'react-bootstrap';
-import globe from '../assets/globe.gif';
 import { GetSummaryStats, type SummaryStatsResponse } from '../api/summary';
 import { Search, type SearchResult } from '../api/search';
 
@@ -62,13 +61,15 @@ export function SearchPage() {
         <Row className="justify-content-center">
           <Col md={10} lg={8} xl={7}>
             <div className="text-center mb-5">
-              <div className="d-inline-flex align-items-center gap-3 mb-3">
-                <img src={globe} style={{width: '60px', height: '60px'}} alt="VectorPedia Globe" />
-                <h1 className="display-4 m-0 fancy-title" style={{fontWeight: 300, letterSpacing: '2px'}}>Vectorpedia</h1>
-              </div>
-              <p className="text-muted" style={{fontSize: '1.1rem', fontWeight: 300}}>
+              <h1 className="display-4 mb-3 fancy-title" style={{fontWeight: 300, letterSpacing: '2px'}}>Vectorpedia</h1>
+              <p className="text-muted mb-3" style={{fontSize: '1.1rem', fontWeight: 300}}>
                 Semantic search across Wikipedia's knowledge base
               </p>
+              <div className="text-muted" style={{fontSize: '0.9rem', opacity: 0.8}}>
+                {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • {' '}
+                {summaryStats?.pages?.toLocaleString() ?? '...'} articles • {' '}
+                {summaryStats?.centroids?.toLocaleString() ?? '...'} clusters
+              </div>
             </div>
             
             <Form onSubmit={handleSearch}>
@@ -106,7 +107,7 @@ export function SearchPage() {
                 </Button>
               </div>
               
-              <div className="d-flex justify-content-between align-items-center flex-wrap" style={{padding: '0 8px'}}>
+              <div className="d-flex justify-content-center align-items-center flex-wrap" style={{padding: '0 8px'}}>
                 <div className="d-flex gap-4 flex-wrap align-items-center">
                   <Form.Check
                     type="checkbox"
@@ -136,16 +137,11 @@ export function SearchPage() {
                   <Form.Check
                     type="switch"
                     id="use-rerank"
-                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>AI Reranking</span>}
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>&ensp;Reranking</span>}
                     checked={useRerank}
                     onChange={(e) => setUseRerank(e.target.checked)}
                     className="mb-2 mb-md-0"
                   />
-                </div>
-                <div className="text-muted mt-2 mt-md-0" style={{fontSize: '0.85rem', opacity: 0.7}}>
-                  {summaryStats?.pages?.toLocaleString() ?? '...'} articles • 
-                  {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • 
-                  {summaryStats?.centroids?.toLocaleString() ?? '...'} clusters
                 </div>
               </div>
             </Form>
