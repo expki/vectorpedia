@@ -64,13 +64,13 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 		prevMeanVectors[i] = make([]float64, vectorLen)
 	}
 	var converged bool
-	for n := 0; n < config.KMEANS_ITTERATION_LIMIT && !converged; n++ {
+	for n := 0; n < config.KMEANS_ITERATION_LIMIT && !converged; n++ {
 		bar.Increment()
 		// create centroid matrix
 		centroidMatrix := compute.NewMatrix(centroidsFloat)
 
 		// find nearest centroid for each data point
-		centroidIndexes := make([]int, 0, len(centroidsFloat))
+		centroidIndexes := make([]int, 0, len(dataFloat))
 		for _, dataMatrix := range chunkedDataMatrix {
 			_, chunkedCentroidIndexes := centroidMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone())
 			centroidIndexes = append(centroidIndexes, chunkedCentroidIndexes...)
@@ -112,27 +112,44 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 			}
 		}
 
-		// Copy current to previous for next iteration
+		// copy current to previous for next iteration
 		for i := range meanVectors {
 			copy(prevMeanVectors[i], meanVectors[i])
 		}
 
-		// Update centroids
-		centroidsFloat = make([][]float64, len(meanVectors))
+		// update centroids in-place with computed means
 		for i := range meanVectors {
-			centroidsFloat[i] = make([]float64, len(meanVectors[i]))
-			copy(centroidsFloat[i], meanVectors[i])
+			if counts[i] > 0 {
+				copy(centroidsFloat[i], meanVectors[i])
+			} else if len(dataFloat) > 0 {
+				// Reinitialize empty centroid with a random data point
+				randIdx := random.Intn(len(dataFloat))
+				copy(centroidsFloat[i], dataFloat[randIdx])
+			}
 		}
+		// reset counts and sumVectors for next iteration
 		for idx := range counts {
 			counts[idx] = 0
 		}
 		for idx := range sumVectors {
-			sumVectors[idx] = make([]float64, vectorLen)
+			for j := range sumVectors[idx] {
+				sumVectors[idx][j] = 0
+			}
 		}
 	}
 	bar.EnableTriggerComplete()
 
-	// Step 4: Order superset by size desc
+	// Step 4: Final cluster assignment to get accurate counts
+	centroidMatrix := compute.NewMatrix(centroidsFloat)
+	counts = make([]int, kS)
+	for _, dataMatrix := range chunkedDataMatrix {
+		_, chunkedCentroidIndexes := centroidMatrix.Clone().MatrixCosineSimilarity(dataMatrix.Clone())
+		for _, idx := range chunkedCentroidIndexes {
+			counts[idx]++
+		}
+	}
+
+	// Step 5: Order superset by size desc
 	type result struct {
 		vector []float64
 		count  int
@@ -173,7 +190,7 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 		prevMeanVectors[i] = make([]float64, vectorLen)
 	}
 	converged = false
-	for n := 0; n < config.KMEANS_ITTERATION_LIMIT && !converged; n++ {
+	for n := 0; n < config.KMEANS_ITERATION_LIMIT && !converged; n++ {
 		bar.Increment()
 		// Create centroid matrix (already float64, no dequantization needed)
 		centroidMatrix := compute.NewMatrix(centroidsFloat)
@@ -226,17 +243,24 @@ func kMeans(multibar *mpb.Progress, id uint64, data [][]uint8, k int) [][]uint8 
 			copy(prevMeanVectors[i], meanVectors[i])
 		}
 
-		// Update centroids (keep as float64, no quantization)
-		centroidsFloat = make([][]float64, len(meanVectors))
+		// Update centroids in-place with computed means
 		for i := range meanVectors {
-			centroidsFloat[i] = make([]float64, len(meanVectors[i]))
-			copy(centroidsFloat[i], meanVectors[i])
+			if counts[i] > 0 {
+				copy(centroidsFloat[i], meanVectors[i])
+			} else if len(dataFloat) > 0 {
+				// Reinitialize empty centroid with a random data point
+				randIdx := random.Intn(len(dataFloat))
+				copy(centroidsFloat[i], dataFloat[randIdx])
+			}
 		}
+		// Reset counts and sumVectors for next iteration
 		for idx := range counts {
 			counts[idx] = 0
 		}
 		for idx := range sumVectors {
-			sumVectors[idx] = make([]float64, vectorLen)
+			for j := range sumVectors[idx] {
+				sumVectors[idx][j] = 0
+			}
 		}
 	}
 	bar.EnableTriggerComplete()

@@ -8,5 +8,5 @@ const (
 	SAMPLE_SIZE             = 5 * BATCH_SIZE_CACHE
 	SPLIT_SIZE              = 5
 	SUPERSET_MUL            = 5
-	KMEANS_ITTERATION_LIMIT = 1_000
+	KMEANS_ITERATION_LIMIT = 1_000
 )
