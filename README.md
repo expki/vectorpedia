@@ -1,6 +1,6 @@
 # Vectorpedia
 
-Vectorpedia is a high-performance vector search engine for a Wikipedia data dump. It is powered by [https://github.com/expki/go-vectorsearch](https://github.com/expki/go-vectorsearch/) library. Vector embedding search allows retrieve more relevant and semantically similar articles by understanding the meaning behind words, not just exact matches. This enables faster, more accurate search results, especially for complex or ambiguous queries.
+Vectorpedia is a high-performance vector search engine for a Wikipedia data dump. It is powered by [https://github.com/expki/vectorpedia](https://github.com/expki/vectorpedia/) library. Vector embedding search allows retrieve more relevant and semantically similar articles by understanding the meaning behind words, not just exact matches. This enables faster, more accurate search results, especially for complex or ambiguous queries.
 
 ## Demo: [https://vectorpedia.vdh.dev/](https://vectorpedia.vdh.dev/)
 
