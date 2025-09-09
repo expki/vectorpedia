@@ -213,7 +213,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
           <div style={{flex: 1}}>
             <h5 className="mb-2" style={{fontSize: '1.25rem', fontWeight: 500}}>
               <a 
-                href={`https://en.wikipedia.org/wiki/${encodeURIComponent(result.uri)}`}
+                href={`${result.uri}`}
                 target="_blank" 
                 rel="noopener noreferrer"
                 style={{
@@ -271,7 +271,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
         <div className="d-flex justify-content-between align-items-center">
           <small>
             <a 
-              href={`https://en.wikipedia.org/wiki/${encodeURIComponent(result.uri)}`}
+              href={`${result.uri}`}
               target="_blank" 
               rel="noopener noreferrer"
               style={{
@@ -283,7 +283,7 @@ function SearchResultCard({ result }: { result: SearchResult }) {
               onMouseEnter={(e) => e.currentTarget.style.color = '#9ca3af'}
               onMouseLeave={(e) => e.currentTarget.style.color = '#6b7280'}
             >
-              🌐 wikipedia.org/wiki/{result.uri.length > 40 ? result.uri.substring(0, 40) + '...' : result.uri}
+              🌐 {result.uri.length > 40 ? result.uri.substring(0, 40) + '...' : result.uri}
             </a>
           </small>
         </div>
