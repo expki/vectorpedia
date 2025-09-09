@@ -59,22 +59,34 @@ export function SearchPage() {
   return (
     <div className="app-container">
       <Container className="py-5">
-        <Row className="justify-content-center mb-4">
-          <Col md={10} lg={8}>
-            <div className='d-flex flex-row justify-content-center align-items-center gap-2 mb-4'>
-              <img src={globe} style={{maxWidth: '4rem'}} />
-              <h1 className="m-0 text-center fancy-title">Vectorpedia</h1>
+        <Row className="justify-content-center">
+          <Col md={10} lg={8} xl={7}>
+            <div className="text-center mb-5">
+              <div className="d-inline-flex align-items-center gap-3 mb-3">
+                <img src={globe} style={{width: '60px', height: '60px'}} alt="VectorPedia Globe" />
+                <h1 className="display-4 m-0 fancy-title" style={{fontWeight: 300, letterSpacing: '2px'}}>Vectorpedia</h1>
+              </div>
+              <p className="text-muted" style={{fontSize: '1.1rem', fontWeight: 300}}>
+                Semantic search across Wikipedia's knowledge base
+              </p>
             </div>
             
             <Form onSubmit={handleSearch}>
-              <div className="search-container mb-3">
+              <div className="search-container mb-4" style={{boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)', borderRadius: '16px'}}>
                 <Form.Control
                   type="text"
-                  placeholder="Search Wikipedia articles..."
+                  placeholder="Ask a question or search for topics..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   className="search-input"
                   size="lg"
+                  style={{
+                    fontSize: '1.15rem',
+                    padding: '18px 24px',
+                    backgroundColor: '#1a1a1a',
+                    border: '2px solid transparent',
+                    borderRadius: '16px 0 0 16px'
+                  }}
                 />
                 <Button 
                   variant="primary" 
@@ -82,52 +94,60 @@ export function SearchPage() {
                   className="search-button"
                   disabled={isLoading}
                   size="lg"
+                  style={{
+                    fontSize: '1.1rem',
+                    padding: '0 32px',
+                    borderRadius: '0 16px 16px 0',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    border: 'none'
+                  }}
                 >
                   {isLoading ? <Spinner animation="border" size="sm" /> : 'Search'}
                 </Button>
               </div>
               
-              <Row className="mb-2">
-                <Col md={8}>
-                  <div className="d-flex gap-3 flex-wrap">
-                    <Form.Check
-                      type="checkbox"
-                      id="search-title"
-                      label="Titles"
-                      checked={searchTitle}
-                      onChange={(e) => setSearchTitle(e.target.checked)}
-                    />
-                    <Form.Check
-                      type="checkbox"
-                      id="search-summary"
-                      label="Summaries"
-                      checked={searchSummary}
-                      onChange={(e) => setSearchSummary(e.target.checked)}
-                    />
-                    <Form.Check
-                      type="checkbox"
-                      id="search-content"
-                      label="Content"
-                      checked={searchContent}
-                      onChange={(e) => setSearchContent(e.target.checked)}
-                    />
-                    <Form.Check
-                      type="switch"
-                      id="use-rerank"
-                      label="Reranking"
-                      checked={useRerank}
-                      onChange={(e) => setUseRerank(e.target.checked)}
-                    />
-                  </div>
-                </Col>
-                <Col md={4} className="text-md-end">
-                  <small className="text-muted">
-                    {summaryStats?.pages?.toLocaleString() ?? '...'} articles • {' '}
-                    {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • {' '}
-                    {summaryStats?.centroids?.toLocaleString() ?? '...'} clusters
-                  </small>
-                </Col>
-              </Row>
+              <div className="d-flex justify-content-between align-items-center flex-wrap" style={{padding: '0 8px'}}>
+                <div className="d-flex gap-4 flex-wrap align-items-center">
+                  <Form.Check
+                    type="checkbox"
+                    id="search-title"
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>Titles</span>}
+                    checked={searchTitle}
+                    onChange={(e) => setSearchTitle(e.target.checked)}
+                    className="mb-2 mb-md-0"
+                  />
+                  <Form.Check
+                    type="checkbox"
+                    id="search-summary"
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>Summaries</span>}
+                    checked={searchSummary}
+                    onChange={(e) => setSearchSummary(e.target.checked)}
+                    className="mb-2 mb-md-0"
+                  />
+                  <Form.Check
+                    type="checkbox"
+                    id="search-content"
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>Full Content</span>}
+                    checked={searchContent}
+                    onChange={(e) => setSearchContent(e.target.checked)}
+                    className="mb-2 mb-md-0"
+                  />
+                  <div className="vr mx-2 d-none d-md-block" style={{height: '20px', opacity: 0.3}} />
+                  <Form.Check
+                    type="switch"
+                    id="use-rerank"
+                    label={<span style={{fontSize: '0.95rem', fontWeight: 400}}>AI Reranking</span>}
+                    checked={useRerank}
+                    onChange={(e) => setUseRerank(e.target.checked)}
+                    className="mb-2 mb-md-0"
+                  />
+                </div>
+                <div className="text-muted mt-2 mt-md-0" style={{fontSize: '0.85rem', opacity: 0.7}}>
+                  {summaryStats?.pages?.toLocaleString() ?? '...'} articles • 
+                  {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • 
+                  {summaryStats?.centroids?.toLocaleString() ?? '...'} clusters
+                </div>
+              </div>
             </Form>
           </Col>
         </Row>
@@ -140,17 +160,20 @@ export function SearchPage() {
           </Row>
         )}
 
-        <Row className="justify-content-center">
-          <Col md={10} lg={8}>
+        <Row className="justify-content-center mt-5">
+          <Col md={10} lg={8} xl={7}>
             {isLoading ? (
               <div className="text-center py-5">
-                <Spinner animation="border" variant="primary" />
-                <p className="mt-2 text-muted">Searching...</p>
+                <Spinner animation="border" variant="primary" style={{width: '3rem', height: '3rem'}} />
+                <p className="mt-3 text-muted" style={{fontSize: '1.1rem'}}>Searching Wikipedia...</p>
               </div>
             ) : searchResults.length > 0 ? (
               <>
-                <div className="mb-3 text-muted">
-                  Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                <div className="mb-4 d-flex align-items-center justify-content-between">
+                  <h5 className="m-0" style={{fontWeight: 300}}>
+                    Found <span style={{fontWeight: 500}}>{searchResults.length}</span> result{searchResults.length !== 1 ? 's' : ''}
+                  </h5>
+                  <small className="text-muted">Sorted by relevance</small>
                 </div>
                 <div className="results-container">
                   {searchResults.map((result) => (
@@ -161,8 +184,9 @@ export function SearchPage() {
             ) : (
               query && !isLoading && (
                 <div className="text-center py-5">
-                  <h5 className="text-muted">No results found</h5>
-                  <p className="text-muted">Try adjusting your search query or enabling more search locations</p>
+                  <div className="mb-3" style={{fontSize: '3rem', opacity: 0.3}}>🔍</div>
+                  <h5 className="text-muted mb-3" style={{fontWeight: 300}}>No results found</h5>
+                  <p className="text-muted" style={{fontSize: '0.95rem'}}>Try adjusting your search query or enabling more search locations</p>
                 </div>
               )
             )}
@@ -175,50 +199,95 @@ export function SearchPage() {
 
 function SearchResultCard({ result }: { result: SearchResult }) {
   const scorePercent = (result.score * 100).toFixed(1);
-  const sourceColor = result.source === 'title' ? 'primary' : 
-                       result.source === 'summary' ? 'success' : 'info';
+  const sourceColor = result.source === 'title' ? '#667eea' : 
+                       result.source === 'summary' ? '#48bb78' : '#4299e1';
+  const sourceLabel = result.source === 'title' ? 'Title Match' : 
+                      result.source === 'summary' ? 'Summary Match' : 'Content Match';
   
   return (
-    <Card className="mb-3 search-result shadow-sm">
-      <Card.Body>
-        <div className="d-flex justify-content-between align-items-start mb-2">
-          <h5 className="mb-0">
-            <a 
-              href={`https://en.wikipedia.org/wiki/${encodeURIComponent(result.uri)}`}
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-decoration-none"
-            >
-              {result.title}
-            </a>
-          </h5>
-          <div className="d-flex gap-2 align-items-center">
-            <Badge bg={sourceColor} className="text-capitalize">
-              {result.source}
-            </Badge>
-            <Badge bg="secondary">
-              {scorePercent}%
-            </Badge>
+    <Card className="mb-3 search-result" style={{
+      backgroundColor: '#1a1a1a',
+      border: '1px solid rgba(255, 255, 255, 0.05)',
+      borderRadius: '12px',
+      transition: 'all 0.3s ease',
+      overflow: 'hidden'
+    }}>
+      <Card.Body style={{padding: '20px 24px'}}>
+        <div className="d-flex justify-content-between align-items-start mb-3">
+          <div style={{flex: 1}}>
+            <h5 className="mb-2" style={{fontSize: '1.25rem', fontWeight: 500}}>
+              <a 
+                href={`https://en.wikipedia.org/wiki/${encodeURIComponent(result.uri)}`}
+                target="_blank" 
+                rel="noopener noreferrer"
+                style={{
+                  color: '#88c4ff',
+                  textDecoration: 'none',
+                  transition: 'color 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.color = '#a8d4ff'}
+                onMouseLeave={(e) => e.currentTarget.style.color = '#88c4ff'}
+              >
+                {result.title}
+              </a>
+            </h5>
+            <div className="d-flex gap-2 align-items-center mb-2">
+              <Badge 
+                style={{
+                  backgroundColor: sourceColor,
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  padding: '5px 10px',
+                  borderRadius: '6px'
+                }}
+              >
+                {sourceLabel}
+              </Badge>
+              <Badge 
+                bg="dark" 
+                style={{
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  padding: '5px 10px',
+                  borderRadius: '6px'
+                }}
+              >
+                {scorePercent}% match
+              </Badge>
+            </div>
           </div>
         </div>
         
         {result.summary && (
-          <Card.Text className="text-muted mb-2">
-            {result.summary.length > 300 
-              ? result.summary.substring(0, 300) + '...' 
+          <p style={{
+            color: '#9ca3af',
+            fontSize: '0.95rem',
+            lineHeight: '1.7',
+            marginBottom: '12px'
+          }}>
+            {result.summary.length > 280 
+              ? result.summary.substring(0, 280) + '...' 
               : result.summary}
-          </Card.Text>
+          </p>
         )}
         
         <div className="d-flex justify-content-between align-items-center">
-          <small className="text-muted">
+          <small>
             <a 
               href={`https://en.wikipedia.org/wiki/${encodeURIComponent(result.uri)}`}
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-muted"
+              style={{
+                color: '#6b7280',
+                fontSize: '0.85rem',
+                textDecoration: 'none',
+                transition: 'color 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#9ca3af'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#6b7280'}
             >
-              wikipedia.org/wiki/{result.uri}
+              🌐 wikipedia.org/wiki/{result.uri.length > 40 ? result.uri.substring(0, 40) + '...' : result.uri}
             </a>
           </small>
         </div>

@@ -97,8 +97,12 @@ func (w *Wikipedia) GenerateEmbedding(ctx context.Context, texts []string) ([][]
 	wg.Add(len(texts))
 
 	for idx, text := range texts {
+		w.embedLockChan <- struct{}{}
 		go func(idx int, text string) {
-			defer wg.Done()
+			defer func() {
+				wg.Done()
+				<-w.embedLockChan
+			}()
 
 			// Select backendTokens server with GPU load balancing
 			backendTokens := w.client.SelectServer()

@@ -6,16 +6,19 @@
 }
 
 body {
-  background-color: #121212;
+  background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
+  min-height: 100vh;
   color: #f8f9fa;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* App container */
 .app-container {
-  background-color: #121212 !important;
-  min-height: 100vh;
-  padding: 20px 0;
+  background: transparent !important;
+  min-height: calc(100vh - 76px);
+  padding: 40px 0;
 }
 
 /* Wiki Search specific styles */
@@ -28,32 +31,40 @@ h1 {
 
 .search-container {
   display: flex;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
   overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-container:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.15) !important;
 }
 
 .search-input {
   flex-grow: 1;
-  padding: 15px 20px;
-  font-size: 1.1rem;
-  border: none !important;
-  border-radius: 12px 0 0 12px !important;
-  background-color: #2c2c2c !important;
+  transition: all 0.3s ease;
+}
+
+.search-input:focus {
+  background-color: #222 !important;
+  border-color: rgba(102, 126, 234, 0.3) !important;
+  box-shadow: none !important;
 }
 
 .search-button {
-  border-radius: 0 12px 12px 0 !important;
-  padding: 0 25px;
-  background-color: #0d6efd !important;
-  border: none !important;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .search-button:hover:not(:disabled) {
-  background-color: #0b5ed7 !important;
-  transform: translateY(-1px);
+  transform: translateX(2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.search-button:active:not(:disabled) {
+  transform: translateX(0);
 }
 
 .results-container {
@@ -144,17 +155,16 @@ h1 {
 /* Search results */
 .search-result {
   border: none;
-  background-color: #1a1a1a !important;
-  transition: all 0.2s ease;
-  margin-bottom: 12px;
-  border-radius: 8px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 16px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
 }
 
 .search-result:hover {
-  background-color: #222222 !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
+  border-color: rgba(102, 126, 234, 0.2) !important;
 }
 
 .search-result .card-body {
@@ -265,11 +275,14 @@ h1 {
 }
 
 .fancy-title {
-  letter-spacing: 1.5px;
-  text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: none;
   opacity: 0;
   transform: translateY(20px);
-  animation: fadeInUp 1.5s ease-out forwards;
+  animation: fadeInUp 0.8s ease-out forwards;
 }
 
 @keyframes fadeInUp {
@@ -282,24 +295,40 @@ h1 {
 /* Search form checkboxes and switches */
 .form-check {
   color: #b8bdc3;
+  transition: all 0.2s ease;
+}
+
+.form-check:hover {
+  color: #d1d5db;
 }
 
 .form-check-input {
-  background-color: #2c2c2c;
-  border-color: #495057;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.form-check-input:hover {
+  border-color: rgba(102, 126, 234, 0.4);
 }
 
 .form-check-input:checked {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
 }
 
 .form-check-input:focus {
-  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
 }
 
 .form-switch .form-check-input {
   width: 2.5rem;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255, 255, 255, 0.5%29'/%3e%3c/svg%3e");
+}
+
+.form-switch .form-check-input:checked {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='white'/%3e%3c/svg%3e");
 }
 
 /* Search stats */

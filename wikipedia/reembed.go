@@ -74,43 +74,70 @@ func (w *Wikipedia) reembedPages(ctx context.Context, writer *os.File) error {
 		}).
 		Preload("Summary").
 		FindInBatches(&pages, batchSize, func(tx *gorm.DB, batch int) error {
-			// Process batch
-			if err := w.processPageBatch(ctx, pages, bar); err != nil {
-				return fmt.Errorf("failed to process page batch %d: %w", batch, err)
+			transportPages := make([]*transportPage, 0, len(pages))
+			for _, page := range pages {
+				if page.Title == nil || page.Summary == nil {
+					continue
+				}
+				var titleEmbeddingID uint64
+				var title string = page.Title.Text
+				if page.Title.Embedding != nil {
+					titleEmbeddingID = page.Title.Embedding.ID
+				} else {
+					titleEmbeddingID = page.Title.EmbeddingID
+				}
+				var summaryEmbeddingID uint64
+				var summary string = page.Summary.Text
+				if page.Summary.Embedding != nil {
+					summaryEmbeddingID = page.Summary.Embedding.ID
+				} else {
+					summaryEmbeddingID = page.Summary.EmbeddingID
+				}
+				transportPages = append(transportPages, &transportPage{
+					title:              title,
+					summary:            summary,
+					titleEmbeddingID:   titleEmbeddingID,
+					summaryEmbeddingID: summaryEmbeddingID,
+				})
 			}
+
+			// Process batch
+			processLockChan <- struct{}{}
+			go func(transportPages []*transportPage) {
+				if err := w.processPageBatch(ctx, transportPages, bar); err != nil {
+					logger.Sugar().Errorf("failed to process page batch %d: %w", batch, err)
+				}
+				<-processLockChan
+			}(transportPages)
+
 			return nil
 		}).Error
 }
 
+type transportPage struct {
+	title              string
+	titleEmbeddingID   uint64
+	summary            string
+	summaryEmbeddingID uint64
+}
+
 // processPageBatch processes a batch of pages and regenerates embeddings for titles and summaries
-func (w *Wikipedia) processPageBatch(ctx context.Context, pages []database.Page, bar *progressbar.ProgressBar) error {
+func (w *Wikipedia) processPageBatch(ctx context.Context, pages []*transportPage, bar *progressbar.ProgressBar) error {
 	// Prepare texts for embedding (titles and summaries interleaved)
 	texts := make([]string, 0, len(pages)*2)
 	embeddingIDs := make([]uint64, 0, len(pages)*2)
 
 	for _, page := range pages {
-		if page.Title == nil || page.Summary == nil {
-			continue
-		}
-
 		// Sanitize title for use in summary embedding (remove pipes)
-		safeTitle := strings.ReplaceAll(page.Title.Text, "|", "")
+		safeTitle := strings.ReplaceAll(page.title, "|", "")
 
 		// Add title embedding text
-		texts = append(texts, fmt.Sprintf("title: none | text: %s", page.Title.Text))
-		if page.Title.Embedding != nil {
-			embeddingIDs = append(embeddingIDs, page.Title.Embedding.ID)
-		} else {
-			embeddingIDs = append(embeddingIDs, page.Title.EmbeddingID)
-		}
+		texts = append(texts, fmt.Sprintf("title: none | text: %s", page.title))
+		embeddingIDs = append(embeddingIDs, page.titleEmbeddingID)
 
 		// Add summary embedding text (with title context)
-		texts = append(texts, fmt.Sprintf("title: %s | text: %s", safeTitle, page.Summary.Text))
-		if page.Summary.Embedding != nil {
-			embeddingIDs = append(embeddingIDs, page.Summary.Embedding.ID)
-		} else {
-			embeddingIDs = append(embeddingIDs, page.Summary.EmbeddingID)
-		}
+		texts = append(texts, fmt.Sprintf("title: %s | text: %s", safeTitle, page.summary))
+		embeddingIDs = append(embeddingIDs, page.summaryEmbeddingID)
 	}
 
 	if len(texts) == 0 {
@@ -156,5 +183,6 @@ func (w *Wikipedia) processPageBatch(ctx context.Context, pages []database.Page,
 }
 
 var (
-	saveLockChan chan struct{} = make(chan struct{}, 1)
+	processLockChan chan struct{} = make(chan struct{}, 8)
+	saveLockChan    chan struct{} = make(chan struct{}, 8)
 )

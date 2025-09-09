@@ -30,6 +30,7 @@ func New(db *database.Database, client ai.Client, ctxChat, ctxEmbed, ctxRerank u
 		contextSizeEmbed:  ctxEmbed,
 		contextSizeRerank: ctxRerank,
 		concurrent:        make(chan struct{}, providers*16),
+		embedLockChan:     make(chan struct{}, providers*50),
 	}
 }
 
