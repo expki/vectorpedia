@@ -168,7 +168,7 @@ func (s *Server) searchEmbeddings(ctx context.Context, queryVector []float64, so
 	}
 
 	// Calculate similarity to all centroids
-	similarities := queryVec.MatrixCosineSimilarity(compute.NewMatrix(centroidMatrix))
+	similarities := queryVec.Clone().MatrixCosineSimilarity(compute.NewMatrix(centroidMatrix))
 	for i, similarity := range similarities {
 		closestCentroids = append(closestCentroids, centroidSimilarity{
 			centroid:   &centroids[i],
@@ -213,7 +213,7 @@ func (s *Server) searchEmbeddings(ctx context.Context, queryVector []float64, so
 			}
 
 			// Calculate similarities for entire batch at once
-			similarities := queryVec.MatrixCosineSimilarity(compute.NewMatrix(embeddingMatrix))
+			similarities := queryVec.Clone().MatrixCosineSimilarity(compute.NewMatrix(embeddingMatrix))
 
 			// Process results
 			for i, similarity := range similarities {
