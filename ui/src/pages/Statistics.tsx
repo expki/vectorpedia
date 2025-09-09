@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col, Card, Badge, Form, Button, Table, ProgressBar, Spinner, Alert } from 'react-bootstrap';
 import { BarChart, Bar, PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import './Statistics.css';
 
 interface GPUInfo {
   index: number;
@@ -191,13 +192,13 @@ export function Statistics() {
   };
 
   return (
-    <Container fluid className="py-4">
+    <Container fluid className="py-4 statistics-dashboard">
       <Row className="mb-4">
         <Col>
           <h1 className="mb-3">Server Statistics Dashboard</h1>
           
           {/* Controls */}
-          <Card className="mb-4">
+          <Card className="mb-4 statistics-card statistics-controls">
             <Card.Body>
               <Row className="align-items-center">
                 <Col md={3}>
@@ -263,7 +264,7 @@ export function Statistics() {
           {/* Summary Cards */}
           <Row className="mb-4">
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Total Servers</h5>
                   <h2>{totalStats.totalServers}</h2>
@@ -272,7 +273,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Total GPUs</h5>
                   <h2>{totalStats.totalGPUs}</h2>
@@ -280,7 +281,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Total Requests</h5>
                   <h2>{totalStats.totalRequests.toLocaleString()}</h2>
@@ -288,7 +289,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Active Requests</h5>
                   <h2>{totalStats.activeRequests}</h2>
@@ -296,7 +297,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Pages/Min</h5>
                   <h2>{data.processing.pages_per_minute.toFixed(1)}</h2>
@@ -304,7 +305,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={2}>
-              <Card className="text-center">
+              <Card className="text-center statistics-card">
                 <Card.Body>
                   <h5>Total Embeddings</h5>
                   <h2>{data.processing.total_embeddings.toLocaleString()}</h2>
@@ -316,7 +317,7 @@ export function Statistics() {
           {/* Charts */}
           <Row className="mb-4">
             <Col md={6}>
-              <Card>
+              <Card className="statistics-card">
                 <Card.Header>Server Load Distribution</Card.Header>
                 <Card.Body>
                   <ResponsiveContainer width="100%" height={300}>
@@ -334,7 +335,7 @@ export function Statistics() {
               </Card>
             </Col>
             <Col md={6}>
-              <Card>
+              <Card className="statistics-card">
                 <Card.Header>GPU Distribution</Card.Header>
                 <Card.Body>
                   <ResponsiveContainer width="100%" height={300}>
@@ -363,7 +364,7 @@ export function Statistics() {
 
           <Row className="mb-4">
             <Col md={12}>
-              <Card>
+              <Card className="statistics-card">
                 <Card.Header>Endpoint Performance (ms)</Card.Header>
                 <Card.Body>
                   <ResponsiveContainer width="100%" height={300}>
@@ -384,10 +385,10 @@ export function Statistics() {
           </Row>
 
           {/* Server Details Table */}
-          <Card>
+          <Card className="statistics-card">
             <Card.Header>Server Details</Card.Header>
             <Card.Body style={{ overflowX: 'auto' }}>
-              <Table striped bordered hover size="sm">
+              <Table striped bordered hover size="sm" className="statistics-table">
                 <thead>
                   <tr>
                     <th>Status</th>
