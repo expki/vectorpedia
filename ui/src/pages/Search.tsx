@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Container, Row, Col, Form, Button, Card, Spinner, Badge } from 'react-bootstrap';
 import globe from '../assets/globe.gif';
-import { GetStatistics, type StatisticsResponse } from '../api/statistics';
+import { GetSummaryStats, type SummaryStatsResponse } from '../api/summary';
 import { Search, type SearchResult } from '../api/search';
 
 export function SearchPage() {
@@ -9,7 +9,7 @@ export function SearchPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [statistics, setStatistics] = useState<StatisticsResponse | undefined>(undefined);
+  const [summaryStats, setSummaryStats] = useState<SummaryStatsResponse | undefined>(undefined);
   
   // Search options
   const [searchTitle, setSearchTitle] = useState<boolean>(true);
@@ -18,7 +18,7 @@ export function SearchPage() {
   const [useRerank, setUseRerank] = useState<boolean>(false);
 
   useEffect(() => {
-    GetStatistics().then((result) => setStatistics(result));
+    GetSummaryStats().then((result) => setSummaryStats(result));
   }, []);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -114,7 +114,7 @@ export function SearchPage() {
                     <Form.Check
                       type="switch"
                       id="use-rerank"
-                      label="AI Reranking"
+                      label="Reranking"
                       checked={useRerank}
                       onChange={(e) => setUseRerank(e.target.checked)}
                     />
@@ -122,9 +122,9 @@ export function SearchPage() {
                 </Col>
                 <Col md={4} className="text-md-end">
                   <small className="text-muted">
-                    {statistics?.database?.pages?.toLocaleString() ?? '...'} articles • {' '}
-                    {statistics?.database?.embeddings?.toLocaleString() ?? '...'} embeddings • {' '}
-                    {statistics?.database?.centroids?.toLocaleString() ?? '...'} clusters
+                    {summaryStats?.pages?.toLocaleString() ?? '...'} articles • {' '}
+                    {summaryStats?.embeddings?.toLocaleString() ?? '...'} embeddings • {' '}
+                    {summaryStats?.centroids?.toLocaleString() ?? '...'} clusters
                   </small>
                 </Col>
               </Row>

@@ -266,6 +266,8 @@ func main() {
 	// Routes: API
 	// Statistics endpoint
 	mux.Handle("/api/statistics", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.StatisticsHandler)))))
+	// Summary stats endpoint (cached for quick response)
+	mux.Handle("/api/stats/summary", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.SummaryStatsHandler)))))
 	// Search endpoint
 	mux.Handle("/api/search", middlewareHeaders(middlewareDecompression(middlewareCompression(http.HandlerFunc(srv.SearchHandler)))))
 

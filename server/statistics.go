@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/expki/vectorpedia/ai"
-	"github.com/expki/vectorpedia/database"
 	"github.com/expki/vectorpedia/logger"
 	"github.com/expki/vectorpedia/wikipedia"
-	"gorm.io/plugin/dbresolver"
 )
 
 func (s *Server) StatisticsHandler(w http.ResponseWriter, r *http.Request) {
@@ -22,28 +20,18 @@ func (s *Server) StatisticsHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 
-	// Get database counts
-	var pageCount, embeddingCount, centroidCount int64
-	s.db.WithContext(ctx).Clauses(dbresolver.Read).Model(&database.Page{}).Count(&pageCount)
-	s.db.WithContext(ctx).Clauses(dbresolver.Read).Model(&database.Embedding{}).Count(&embeddingCount)
-	s.db.WithContext(ctx).Clauses(dbresolver.Read).Model(&database.Centroid{}).Count(&centroidCount)
+	// Get cached database statistics
+	cachedStats := s.GetCachedStats()
 
 	stats := struct {
 		Servers    ai.ClientStatistics          `json:"servers"`
 		Processing wikipedia.ProcessingAverages `json:"processing,omitempty"`
-		Database   struct {
-			Pages      int64 `json:"pages"`
-			Embeddings int64 `json:"embeddings"`
-			Centroids  int64 `json:"centroids"`
-		} `json:"database"`
+		Database   DatabaseStats                `json:"database"`
 	}{
 		Servers:    s.ai.GetStatistics(ctx),
 		Processing: s.wikipedia.GetAverages(),
+		Database:   cachedStats,
 	}
-
-	stats.Database.Pages = pageCount
-	stats.Database.Embeddings = embeddingCount
-	stats.Database.Centroids = centroidCount
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(stats); err != nil {
